@@ -3,3 +3,35 @@ venv/
 __pycache__/
 .env
 
+# === Python ===
+*.py[cod]
+*.so
+*.egg-info/
+*.pkl
+*.pt
+*.h5
+
+# === Data Files ===
+data/
+
+# === Model Checkpoints ===
+models/
+*.ckpt
+*.pb
+*.onnx
+*.joblib
+
+# === Output Artifacts ===
+outputs/
+*.log
+*.csv
+*.png
+*.pdf
+
+# === Environment/Package Managers ===
+.Python
+pip-wheel-metadata/
+__pypackages__/
+*.pyenv
+*.conda
+*.lock
