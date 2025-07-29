@@ -1,6 +1,6 @@
 dataset:
   name: MAESTRO
-  data_root: ./data/
+  data_root: ../../data/unprocessed/maestro-v3.0.0/
   sample_rate: 16000
   segment_length_seconds: 10
   input_representation: cqt  # or mel, spectrogram
