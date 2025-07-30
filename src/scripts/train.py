@@ -1,20 +1,17 @@
-import argparse
-from training.train_model import train 
-from utils import add_universal_args
+from src.training.train_model import train 
+from omegaconf import DictConfig
+import hydra
+from pathlib import Path
 
-def add_args(parser: argparse.ArgumentParser) -> None:
-    add_universal_args(parser=parser)
-    parser.add_argument()
+this_dir = Path(__file__).parent
+config_path = this_dir.parents[1] / "configs"
 
-if __name__ == '__main__':
-    # make an argument parser object
-    parser = argparse.ArgumentParser()
-
-    # add arguments
-    add_args(parser)
-
-    # parse the arguments, updating the config path and checkpoint path if applicable
-
+@hydra.main(config_path=str(config_path), config_name="config.yaml", version_base=None)
+def main(configs: DictConfig):
+    # arguments are automatically parsed by hydra and configs updated
 
     # run eval with updated paths. Inside this method is where the rest of the configs will be adjusted
-    train(config_path=config_path, checkpoint_path=checkpoint_path)
+    train(configs=configs, checkpoint_path="")
+
+if __name__ == '__main__':
+    main()

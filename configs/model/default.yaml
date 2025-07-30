@@ -1,0 +1,11 @@
+type: unet
+input_channels: 1 
+output_channels:
+  frames: 88
+  onsets: 88
+  velocities: 88
+hidden_size: 64
+depth: 4 
+dropout: .2 
+use_batch_norm: true
+

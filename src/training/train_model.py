@@ -1,3 +1,8 @@
 
-def train(config_path: str, checkpoint_path: str) -> None:
+from omegaconf import DictConfig
+
+def train(configs: DictConfig, checkpoint_path: str) -> None:
+    print("Configs:")
+    print(configs)
+
 

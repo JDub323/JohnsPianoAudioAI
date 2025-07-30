@@ -1,0 +1,9 @@
+name: MAESTRO 
+data_root: ./data/
+sample_rate: 16000 
+segment_length_seconds: 5
+input_representation: mel
+n_bins: 88 
+hop_length: 512 
+normalize_audio: false
+add_noise: false 

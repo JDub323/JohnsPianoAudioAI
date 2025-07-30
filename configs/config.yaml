@@ -1,0 +1,17 @@
+defaults:
+  - dataset: default
+  - model: default
+  - training: default
+  - _self_
+
+experiment:
+  name: base_experiment
+  seed: 42
+  device: cuda
+  num_workers: 4 
+  debug: true 
+  use_wandb: true
+
+hydra:
+  run:
+    dir: .
