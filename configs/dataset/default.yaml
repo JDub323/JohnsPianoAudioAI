@@ -1,5 +1,6 @@
 name: MAESTRO 
 data_root: ./data/
+relative_path_to_spreadsheet: unprocessed/maestro-v3.0.0/maestro-v3.0.0.csv
 sample_rate: 16000 
 segment_length_seconds: 5
 input_representation: mel

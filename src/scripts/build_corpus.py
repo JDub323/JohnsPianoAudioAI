@@ -1,4 +1,4 @@
-# import the corpus building function
+from src.corpus.build_corpus import build_corpus
 from omegaconf import DictConfig
 import hydra
 from pathlib import Path
@@ -11,7 +11,7 @@ def main(configs: DictConfig):
     # arguments are automatically parsed by hydra and configs updated
 
     # run the corpus building function
-    return
+    build_corpus(configs)
 
 if __name__ == '__main__':
     main()
