@@ -1,9 +1,10 @@
 name: MAESTRO 
 data_root: ./data/
 relative_path_to_spreadsheet: unprocessed/maestro-v3.0.0/maestro-v3.0.0.csv
+segment_length_seconds: 30
+only_split_when_quiet: false
 sample_rate: 16000 
-segment_length_seconds: 5
-input_representation: mel
+input_representation: mel # or CQT, or non-negative matrix factorization of the input
 n_bins: 88 
 hop_length: 512 
 normalize_audio: false

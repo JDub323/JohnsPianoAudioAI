@@ -6,38 +6,51 @@ import os
 def build_corpus(configs: DictConfig):
     # get the dataframe with all the files
     csv_path = os.path.join(configs.dataset.data_root, configs.dataset.relative_path_to_spreadsheet)
-    df = pd.read_csv(csv_path)
-    print_data(df)
+    df_unproc = pd.read_csv(csv_path)
 
     # clean up the dataframe (get rid of any null rows, unneeded cols, etc.)
-    clean_df(df, configs)
-    print_data(df)
+    # pneumonic: dataframe, unprocessed
+    df_unproc = clean_df(df_unproc, configs)
+    print_data(df_unproc)
+
+    # delete the old processed data (if it exists)
 
     # preprocess data: convert it all from .wav to whatever spectrogram representation I want.
     # also adds noise to the data which could be from artifacts from an iphone, iff that is 
     # what configs say to do
-    # If my U-net is to make low-quality audio high-quality, this is an important step
-    # This can wait until later though.. maybe
-    # this saves the processed data under the "processed" directory
-    process_data(df, configs)
 
-    # split the data into training data, validation, and evaluation data 
-    # on the csv, using the seed (same rng every time)
+    # make df for processed data
+    # TODO: add columns for all of the metadata with how the audio was augmented
+    column_names = ['split', 'data_filename', 'labels_filename', 'duration', 'year']
+    df_proc = pd.DataFrame(columns=column_names) # pneumonic: dataframe, processed
+
+    # for every audio file 
+    for index, row in df_unproc.itterrows():
+        # download the .wav file 
+        # call a split function to return a list of lists of floats for the .wav file 
+        placeholder_float_list = [[0,0], [1.3, 7.1]]
+
+        # for each audio segment
+        for vector in placeholder_float_list:
+            # augment the segment audio (make it a lower quality)
+
+            # compute the spectrogram or NMF 
+
+            # calculate what the split should be 
+
+            # save the spectrogram or NMF to wherever the split should be (use the seed for rng)
+
+            # add the data to a dataframe which has metadata and filename
+
+    # save the dataframe
+
+
     # also, save the split dataframes. Since they are split as csvs which point to certain options, 
     # it doesn't really matter if the preprocessed files are in the same folders or not
-    split_and_save(df, configs)
+    # consider making them "not"
 
-def clean_df(df: pd.DataFrame, configs: DictConfig) -> None:
-    df = df.dropna()
+def clean_df(df: pd.DataFrame, configs: DictConfig) -> pd.DataFrame:
     df = df.drop(columns=['canonical_composer', 'canonical_title']) # consider dropping the recommended split
+    df = df.dropna()
+    return df
 
-def process_data(df: pd.DataFrame, configs: DictConfig) -> None:
-    
-    print("make spectrogram image files here, potentially using logic in its own file")
-
-def split_and_save(df: pd.DataFrame, configs: DictConfig) -> None:
-    # maestro already gives recommended splits, so I will skip the step of splitting by piece
-    # it is in the 'split' column of the df, with strings of 'train', 'validation', or 'test' 
-
-    # split the pieces into small segments
-    print("split and also save the splits too :)")
