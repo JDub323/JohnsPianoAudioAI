@@ -1,11 +1,19 @@
 name: MAESTRO 
-data_root: ./data/
-relative_path_to_spreadsheet: unprocessed/maestro-v3.0.0/maestro-v3.0.0.csv
-segment_length_seconds: 30
-only_split_when_quiet: false
+data_root: ./data/unprocessed/maestro-v3.0.0/
+export_root: ./data/processed/
+spreadsheet_name: maestro-v3.0.0.csv
+segment_length: 30 # in seconds. Consider trying to only split on-beat, or mid-beat.
 sample_rate: 16000 
 input_representation: mel # or CQT, or non-negative matrix factorization of the input
 n_bins: 88 
 hop_length: 512 
 normalize_audio: false
-add_noise: false 
+augment_audio_data: false
+augmentation_probabilities: # THIS PIPELINE AND PROBABILITY DIST. WAS TAKEN FROM Mobile-AMT 
+  pitch_shift: .5 
+  speech_noise: .5
+  environment_noise: .5 # do this before room impulse response
+  RIR_conv: 1 # room impulse response convolution
+  stationary_noise: .5
+  DIR_conv: 1 # device impulse response convolution
+  clamp: .05 # audio clipping
