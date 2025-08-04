@@ -4,9 +4,17 @@ export_root: ./data/processed/
 spreadsheet_name: maestro-v3.0.0.csv
 segment_length: 30 # in seconds. Consider trying to only split on-beat, or mid-beat.
 sample_rate: 16000 
-input_representation: mel # or CQT, or non-negative matrix factorization of the input
-n_bins: 88 
-hop_length: 512 
+num_channels: 1
+transform:
+  input_representation: mel # or CQT, or non-negative matrix factorization of the input
+  n_bins: 88 
+  hop_length: 512 
+  filter_scale: 1 # small means higher frequency resolution, big means higher time resolution
+  window_size: 2048
+  window_type: hann
+  scale: True
+  f_min: 27.5 # may want to account for ralisback curve by lowering the minimum frequency by arbitrary ~15 cents (should be 27.5)
+  f_max: 4186 # these are frequency minimum and maximums btw
 normalize_audio: false
 augment_audio_data: false
 augmentation_probabilities: # THIS PIPELINE AND PROBABILITY DIST. WAS TAKEN FROM Mobile-AMT 

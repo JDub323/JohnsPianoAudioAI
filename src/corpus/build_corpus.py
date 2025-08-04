@@ -1,11 +1,14 @@
 from omegaconf import DictConfig
-from src.corpus.utils import print_data, split_pretty_midi_into_segments
+from utils import download_wav, print_data, split_pretty_midi_into_segments, complex_to_log_spectrogram
+from augment_data import augment_data, generate_augmentations
+from datatypes import NoteLabels, ProcessedAudioSegment
 import pandas as pd
 import numpy as np
 import os
 import librosa
 import pretty_midi
-from src.corpus.datatypes import NoteLabels, ProcessedAudioSegment
+import shutil 
+import torch
 
 def build_corpus(configs: DictConfig):
     # get the dataframe with all the files
@@ -18,25 +21,30 @@ def build_corpus(configs: DictConfig):
     print_data(df_unproc)
 
     # delete the old processed data (if it exists)
+    if os.path.exists(configs.dataset.export_root):
+        print(f"Deleting old processed data directory: {configs.dataset.export_root}")
+        shutil.rmtree(configs.dataset.export_root)
+
+        # add the folder back
+        os.makedirs(configs.dataset.export_root, exist_ok=True)
 
     # preprocess data: convert it all from .wav to whatever spectrogram representation I want.
     # also adds noise to the data which could be from artifacts from an iphone, iff that is 
     # what configs say to do
 
     # make df for processed data
-    # TODO: add columns for all of the metadata with how the audio was augmented
-    column_names = ['split', 'data_filename', 'labels_filename', 'duration', 'year']
+    column_names = ['split', 'filename', 'duration', 'year', 'augmentations']
     df_proc = pd.DataFrame(columns=column_names) # pneumonic: dataframe, processed
 
     # for every audio file 
     for index, row in df_unproc.itterrows():
         # download the .wav file 
-        path_to_wav = os.path.join(configs.dataset.data_root, row['audio_filename'])
-        song_wav = librosa.load(path_to_wav, sr=configs.dataset.sample_rate)
+        song_wav = download_wav(configs, filename=row['midi_filename'])
 
         # download the midi file while I am here
         path_to_midi = os.path.join(configs.dataset.data_root, row['midi_filename'])
         song_midi = pretty_midi.Pretty_MIDI(path_to_midi)
+        # note that song_midi can either be a mono np.ndarray or stereo, depending on configs
 
         # call a split function to return a list of tuples, each with a .wav vector and 
         # the corresponding midi object
@@ -51,10 +59,11 @@ def build_corpus(configs: DictConfig):
             # TODO IN func below:
             # pad the end of the audio segment (abrupt end. remember not to train with abrupt start)
             # this is a little off, since piano audio is slightly muffled before ending. Is it good enough?
-            augmented_wav = augment_data(configs, wav)
+            augmentations = generate_augmentations(configs)
+            augmented_wav = augment_data(configs, wav, augmentations)
 
             # compute the spectrogram or NMF 
-            input_tensor = get_input_vector(configs, wav)
+            input_tensor = get_input_vector(configs, augmented_wav)
 
             # compute the ground truth tensors (NoteLabels object) 
             note_labels = get_truth_tensor(configs, midi)
@@ -63,10 +72,9 @@ def build_corpus(configs: DictConfig):
             split_type = calc_split(configs, row)
 
             # save the input tensor to wherever the split should be (use the seed for rng)
-            # TODO: refactor this to handle other database setups
             processed_segment = ProcessedAudioSegment(model_input=input_tensor, ground_truth=note_labels)
-            save_location = calc_save_location(configs, )
-            torch.save(processed_segment, save_location)
+            save_location = calc_save_location(configs, filename=row['audio_filename'], split_type=split_type, i=index)
+            torch.save(processed_segment, os.path.join(save_location[0], save_location[1]))
 
             # add the data to a dataframe which has metadata and filename
             # remember to make file names have relative paths
@@ -82,17 +90,62 @@ def build_corpus(configs: DictConfig):
     # it doesn't really matter if the preprocessed files are in the same folders or not
     # consider making them "not"
 
-def clean_df(df: pd.DataFrame) -> pd.DataFrame:
+def clean_df(df: pd.DataFrame, configs) -> pd.DataFrame:
     df = df.drop(columns=['canonical_composer', 'canonical_title']) # consider dropping the recommended split
     df = df.dropna()
     return df
 
-def calc_save_location(configs, row: pd.Series, split_type: str, i: int) -> str:
+# returns a tuple which needs to be joined with path.join. First is the path, second is the filename (w/o relative path)
+def calc_save_location(configs, filename: str, split_type: str, i: int) -> tuple[str, str]:
     path = os.path.join(configs.dataset.export_root, split_type)
-    assert(row['audio_filename'].endswith('.wav'))
-    filename = os.path.basename(row['audio_filename']).removesuffix('.wav') + f"_Section_{i:02d}.pt"
-    return path.join(path, filename)
+    assert(filename.endswith('.wav'))
+    new_filename = os.path.basename(filename.removesuffix('.wav')) + f"_Section_{i:02d}.pt"
+    return (path, new_filename)
 
+def get_input_vector(configs, wav: np.ndarray) -> torch.Tensor:
+    # gather the configs 
+    sr = configs.dataset.transform.sample_rate
+    hl = configs.dataset.transform.hop_length
+    nb = configs.dataset.transform.num_bins
+    fs = configs.dataset.transform.filter_scale
+    wt = configs.dataset.transform.window_type
+    ws = configs.dataset.transform.window_size
+    s = configs.dataset.transform.scale
+    fmin = configs.dataset.transform.fmin
+    fmax = configs.dataset.transform.fmax
+
+    # take the correct transform:
+    # log-mel spectrogram
+    if configs.dataset.input_representation == 'mel':
+        # compute complex power spectrogram 
+        C = librosa.feature.melspectrogram(y=wav, sr=sr, n_fft=ws, hop_length=hl, window=wt, n_mels=nb)
+
+        # convert the complex, power spectrogram to log-mel
+        ret = complex_to_log_spectrogram(spectro=C) 
+        
+
+    # constant q transform 
+    elif configs.dataset.input_representation == 'cqt':
+        # compute the constant q transform
+        C = librosa.cqt(y=wav, sr=sr, hop_length=hl, n_bins=nb, filter_scale=fs, window=wt, scale=s)
+
+        # return var is 
+        ret = complex_to_log_spectrogram(spectro=C)
+
+    # non-negative matrix factorization
+    elif configs.dataset.input_representation == 'nmf':
+        raise ValueError('This functionality was not added yet')
+    else:
+        raise ValueError('Invalid input representation')
+
+
+    # return the transform as a torch Tensor. The batch size will remain 1 here, will merge many tensors 
+    # together before training
+
+
+def get_truth_tensor(configs, midi) -> torch.Tensor
+
+def add_segment_to_df(configs, )
 
 def split_track(configs, wav: np.ndarray, midi) -> list[tuple]:
     # get the midi vector

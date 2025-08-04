@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 import pretty_midi
+from librosa import power_to_db
+from os import path 
+import librosa
 
 def print_data(df: pd.DataFrame) -> None:
     print("Data: ")
@@ -8,6 +11,15 @@ def print_data(df: pd.DataFrame) -> None:
     # Get basic info (useful for checking data types, non-null counts)
     print("\nDataFrame Info:")
     df.info()
+
+def complex_to_log_spectrogram(spectro: np.ndarray) -> np.ndarray:
+    return power_to_db(np.abs(spectro)).astype(np.float32)
+
+def download_wav(configs, filename: str) -> np.ndarray:
+    path_to_wav = path.join(configs.dataset.data_root, filename)
+    use_mono = configs.dataset.num_channels == 1
+    ret, _ = librosa.load(path_to_wav, sr=configs.dataset.sample_rate, mono=use_mono)
+    return ret
 
 # AI generated function
 def split_pretty_midi_into_segments(midi, segment_duration: float):
