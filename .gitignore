@@ -4,6 +4,10 @@ __pycache__/
 .env
 .hydra
 .pytest_cache
+.requirements_hash
+
+# local tooling
+./update_requirements.sh
 
 # === Python ===
 *.py[cod]

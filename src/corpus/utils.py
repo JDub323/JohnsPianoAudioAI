@@ -7,8 +7,7 @@ from os import path, makedirs
 import mido
 from io import BytesIO
 import librosa
-# TODO install with pip
-# from tabulate import tabulate
+from tabulate import tabulate
 
 def print_data(df: pd.DataFrame) -> None:
     print("Data: ")
@@ -23,7 +22,6 @@ def print_midi(midi) -> None:
 
     note_rows = []
     headers = ['Instrument', 'Pitch (num)', 'Pitch (name)', 'Start (s rounded)', 'End (s rounded)', 'Velocity']
-    print(headers)
     for i, instrument in enumerate(midi.instruments):
         for note in instrument.notes:
             note_rows.append([
@@ -34,11 +32,10 @@ def print_midi(midi) -> None:
                 round(note.end, 3),
                 note.velocity,
             ])
-            print(note_rows[-1])
 
     note_rows.sort(key=lambda x: x[3])
 
-    # print(tabulate(note_rows, headers=headers, tablefmt='fancy_grid'))
+    print(tabulate(note_rows, headers=headers, tablefmt='fancy_grid'))
 
 def add_processed_data_folders(configs):
     makedirs(configs.dataset.export_root, exist_ok=True)
