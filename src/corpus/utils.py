@@ -1,9 +1,14 @@
+import omegaconf
 import pandas as pd
 import numpy as np
 import pretty_midi
 from librosa import power_to_db
-from os import path 
+from os import path, makedirs
+import mido
+from io import BytesIO
 import librosa
+# TODO install with pip
+# from tabulate import tabulate
 
 def print_data(df: pd.DataFrame) -> None:
     print("Data: ")
@@ -12,74 +17,91 @@ def print_data(df: pd.DataFrame) -> None:
     print("\nDataFrame Info:")
     df.info()
 
+def print_midi(midi) -> None:
+    print('MIDI:')
+    print(midi)
+
+    note_rows = []
+    headers = ['Instrument', 'Pitch (num)', 'Pitch (name)', 'Start (s rounded)', 'End (s rounded)', 'Velocity']
+    print(headers)
+    for i, instrument in enumerate(midi.instruments):
+        for note in instrument.notes:
+            note_rows.append([
+                instrument.name or f'Program {instrument.program}',
+                note.pitch,
+                pretty_midi.note_number_to_name(note.pitch),
+                round(note.start, 3),
+                round(note.end, 3),
+                note.velocity,
+            ])
+            print(note_rows[-1])
+
+    note_rows.sort(key=lambda x: x[3])
+
+    # print(tabulate(note_rows, headers=headers, tablefmt='fancy_grid'))
+
+def add_processed_data_folders(configs):
+    makedirs(configs.dataset.export_root, exist_ok=True)
+    subfolders = ['train', 'test', 'validation']
+    for sf in subfolders:
+        dir_ = path.join(configs.dataset.export_root, sf)
+        makedirs(dir_, exist_ok=True)
+
+
 def complex_to_log_spectrogram(spectro: np.ndarray) -> np.ndarray:
     return power_to_db(np.abs(spectro)).astype(np.float32)
 
 def download_wav(configs, filename: str) -> np.ndarray:
+    print(f'Downloading {filename} audio')
     path_to_wav = path.join(configs.dataset.data_root, filename)
     use_mono = configs.dataset.num_channels == 1
     ret, _ = librosa.load(path_to_wav, sr=configs.dataset.sample_rate, mono=use_mono)
     return ret
 
-# AI generated function
-def split_pretty_midi_into_segments(midi, segment_duration: float):
-    ret = []
-    total_midi_duration = midi.get_end_time()
-    num_segments = int(np.ceil(total_midi_duration / segment_duration))
-
-    for i in range(num_segments):
-        segment_start_time = i * segment_duration
-        segment_end_time = min(segment_start_time + segment_duration, total_midi_duration + 0.001) # Add small buffer
-
-        segment_pm = pretty_midi.PrettyMIDI()
-
-        # Copy global meta-events (like tempo changes, time signatures)
-        # and adjust their times relative to the segment start.
-        # This is important for accurate playback/interpretation of segments.
-        for tempo_change_time, tempo in midi.get_tempo_changes():
-            if segment_start_time <= tempo_change_time < segment_end_time:
-                segment_pm.adjust_times([(tempo_change_time - segment_start_time, tempo)])
-
-        for time_signature in midi.time_signature_changes:
-            if segment_start_time <= time_signature.time < segment_end_time:
-                new_ts = pretty_midi.TimeSignature(
-                    numerator=time_signature.numerator,
-                    denominator=time_signature.denominator,
-                    time=time_signature.time - segment_start_time
-                )
-                segment_pm.time_signature_changes.append(new_ts)
-        
-        # Iterate through instruments and notes
-        for original_instrument in midi.instruments:
-            new_instrument = pretty_midi.Instrument(
-                program=original_instrument.program,
-                is_drum=original_instrument.is_drum,
-                name=original_instrument.name
-            )
-            
-            for note in original_instrument.notes:
-                # Check if the note overlaps with the current segment
-                # A note overlaps if its start is before the segment ends AND its end is after the segment starts
-                if note.start < segment_end_time and note.end > segment_start_time:
-                    # Adjust note start and end times relative to the segment's beginning
-                    adjusted_start = max(0.0, note.start - segment_start_time)
-                    adjusted_end = min(segment_duration, note.end - segment_start_time)
-
-                    # Only add the note if it still has a positive duration within the segment
-                    if adjusted_end > adjusted_start:
-                        new_note = pretty_midi.Note(
-                            velocity=note.velocity,
-                            pitch=note.pitch,
-                            start=adjusted_start,
-                            end=adjusted_end
-                        )
-                        new_instrument.notes.append(new_note)
-            
-            # Only add the instrument to the segment_pm if it contains notes in this segment
-            if new_instrument.notes:
-                segment_pm.instruments.append(new_instrument)
-        
-        ret.append(segment_pm)
-        print(f"  Segment {i+1}/{num_segments} (Time: {segment_start_time:.2f}s to {segment_end_time:.2f}s) created. Notes: {sum(len(inst.notes) for inst in segment_pm.instruments)}")
-
+def calc_duration(wav, midi) -> float:
+    ret = midi.get_end_time()
+    # TODO: make sure that the midi and wav files are the same length
     return ret
+
+def save_configs(configs) -> None:
+    root = configs.dataset.export_root
+    save_location = path.join(root, 'configs.yaml')
+    omegaconf.OmegaConf.save(configs, save_location)
+    print('Configs saved!')
+
+def split_pretty_midi(pm: pretty_midi.PrettyMIDI, segment_length=30.0):
+    segments = []
+    total_time = pm.get_end_time()
+
+    tempos, tempo_times = pm.get_tempo_changes()
+    assert len(tempos) == 1, "this function only works when there aren't any tempo changes"
+
+    # iterate over split points
+    start_time = 0.0
+    while start_time < total_time:
+        end_time = min(start_time + segment_length, total_time)
+        
+        new_pm = pretty_midi.PrettyMIDI(initial_tempo=tempo_times[0] if tempo_times.size > 0 else 120)
+
+        for inst in pm.instruments:
+            new_inst = pretty_midi.Instrument(program=inst.program, is_drum=inst.is_drum, name=inst.name)
+
+            for note in inst.notes:
+                if note.end > start_time and note.start < end_time:
+                    # cut 
+                    new_start = max(note.start, start_time) - start_time 
+                    new_end = min(note.end, end_time) - start_time
+                    new_inst.notes.append(pretty_midi.Note(
+                        velocity=note.velocity, 
+                        pitch=note.pitch,
+                        start=new_start,
+                        end=new_end
+                    ))
+
+            if new_inst.notes:
+                new_pm.instruments.append(new_inst)
+
+        segments.append(new_pm)
+        start_time += segment_length
+
+    return segments

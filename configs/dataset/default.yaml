@@ -2,6 +2,7 @@ name: MAESTRO
 data_root: ./data/unprocessed/maestro-v3.0.0/
 export_root: ./data/processed/
 spreadsheet_name: maestro-v3.0.0.csv
+use_default_splits: True
 segment_length: 30 # in seconds. Consider trying to only split on-beat, or mid-beat.
 sample_rate: 16000 
 num_channels: 1
@@ -14,7 +15,7 @@ transform:
   window_type: hann
   scale: True
   f_min: 27.5 # may want to account for ralisback curve by lowering the minimum frequency by arbitrary ~15 cents (should be 27.5)
-  f_max: 4186 # these are frequency minimum and maximums btw
+  f_max: 4186 # these are frequency minimum and maximums btw. This is not used as of 8/6/25, since n_bins and f_min dictate this
 normalize_audio: false
 augment_audio_data: false
 augmentation_probabilities: # THIS PIPELINE AND PROBABILITY DIST. WAS TAKEN FROM Mobile-AMT 

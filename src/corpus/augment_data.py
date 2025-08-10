@@ -1,4 +1,4 @@
-from datatypes import AugmentationData
+from src.corpus.datatypes import AugmentationData
 import numpy as np
 
 from omegaconf import DictConfig
