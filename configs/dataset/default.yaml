@@ -1,11 +1,14 @@
 name: MAESTRO 
+row_limit: -1 # -1 means unbound, so it will go through all rows.
 data_root: ./data/unprocessed/maestro-v3.0.0/
 export_root: ./data/processed/
-spreadsheet_name: maestro-v3.0.0.csv
+spreadsheet_name: maestro-v3.0.0.csv # processed data uses same name, under processed directory
 use_default_splits: True
 segment_length: 30 # in seconds. Consider trying to only split on-beat, or mid-beat.
 sample_rate: 16000 
 num_channels: 1
+midis_exist: True 
+
 transform:
   input_representation: mel # or CQT, or non-negative matrix factorization of the input
   n_bins: 88 
@@ -16,6 +19,7 @@ transform:
   scale: True
   f_min: 27.5 # may want to account for ralisback curve by lowering the minimum frequency by arbitrary ~15 cents (should be 27.5)
   f_max: 4186 # these are frequency minimum and maximums btw. This is not used as of 8/6/25, since n_bins and f_min dictate this
+
 normalize_audio: false
 augment_audio_data: false
 augmentation_probabilities: # THIS PIPELINE AND PROBABILITY DIST. WAS TAKEN FROM Mobile-AMT 

@@ -1,0 +1,9 @@
+# inherit most of the stuff from config.yaml defaults 
+defaults:
+ - config
+ - _self_
+
+# edit other stuff I want to change for all tests
+dataset:
+  row_limit: 10
+  export_root: ./data/test_processed/

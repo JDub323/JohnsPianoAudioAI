@@ -3,6 +3,14 @@ from datetime import datetime
 import wandb 
 from omegaconf import DictConfig
 import hydra 
+import logging
+
+# sets up option to mute/show logging statements
+def setup_logging(configs):
+    logging.basicConfig(
+        level=logging.DEBUG if configs.verbose else logging.WARNING,
+        format="%(levelname)s: %(message)s"
+    )
 
 def create_output_dir(config):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

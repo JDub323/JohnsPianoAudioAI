@@ -4,10 +4,11 @@ import numpy as np
 import pretty_midi
 from librosa import power_to_db
 from os import path, makedirs
-import mido
-from io import BytesIO
 import librosa
 from tabulate import tabulate
+import logging
+
+from src.corpus.datatypes import ProcessedAudioSegment
 
 def print_data(df: pd.DataFrame) -> None:
     print("Data: ")
@@ -16,9 +17,9 @@ def print_data(df: pd.DataFrame) -> None:
     print("\nDataFrame Info:")
     df.info()
 
+# function only called if configs.verbose
 def print_midi(midi) -> None:
     print('MIDI:')
-    print(midi)
 
     note_rows = []
     headers = ['Instrument', 'Pitch (num)', 'Pitch (name)', 'Start (s rounded)', 'End (s rounded)', 'Velocity']
@@ -33,8 +34,11 @@ def print_midi(midi) -> None:
                 note.velocity,
             ])
 
-    note_rows.sort(key=lambda x: x[3])
+    if not note_rows:
+        print("No instruments or notes found in this MIDI.")
+        return
 
+    note_rows.sort(key=lambda x: x[3])
     print(tabulate(note_rows, headers=headers, tablefmt='fancy_grid'))
 
 def add_processed_data_folders(configs):
@@ -44,27 +48,38 @@ def add_processed_data_folders(configs):
         dir_ = path.join(configs.dataset.export_root, sf)
         makedirs(dir_, exist_ok=True)
 
+def passed_row_limit(configs, i: int) -> bool:
+    lim = configs.dataset.row_limit
+    if lim == -1: return False # if the limit is set to -1, it is unbound: should process all rows
+
+    return lim <= i
 
 def complex_to_log_spectrogram(spectro: np.ndarray) -> np.ndarray:
     return power_to_db(np.abs(spectro)).astype(np.float32)
 
 def download_wav(configs, filename: str) -> np.ndarray:
-    print(f'Downloading {filename} audio')
+    logging.info(f'Downloading {filename} audio') # log
     path_to_wav = path.join(configs.dataset.data_root, filename)
     use_mono = configs.dataset.num_channels == 1
     ret, _ = librosa.load(path_to_wav, sr=configs.dataset.sample_rate, mono=use_mono)
     return ret
 
-def calc_duration(wav, midi) -> float:
-    ret = midi.get_end_time()
-    # TODO: make sure that the midi and wav files are the same length
-    return ret
+def calc_duration(configs, wav, midi) -> float:
+    # midi time duration
+    midi_duration = midi.get_end_time()
+    wav_duration = len(wav) / configs.dataset.sample_rate
+
+    # test to make sure the durations are the same length (allow for some floating point error)
+    if configs.dataset.midis_exist:
+        assert abs(midi_duration - wav_duration) < 1e-6, "midi and wav files differ in length"
+
+    return wav_duration
 
 def save_configs(configs) -> None:
     root = configs.dataset.export_root
     save_location = path.join(root, 'configs.yaml')
     omegaconf.OmegaConf.save(configs, save_location)
-    print('Configs saved!')
+    logging.info('Configs saved!')
 
 def split_pretty_midi(pm: pretty_midi.PrettyMIDI, segment_length=30.0):
     segments = []

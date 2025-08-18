@@ -4,6 +4,7 @@ defaults:
   - training: default
   - _self_
 
+verbose: True
 experiment:
   name: base_experiment
   seed: 42

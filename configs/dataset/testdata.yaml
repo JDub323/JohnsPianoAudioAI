@@ -1,0 +1,11 @@
+
+defaults: 
+ - default
+
+name: TEST
+data_root: ./data/test_unprocessed/custom_test_tracks/
+export_root: ./data/test_processed/
+spreadsheet_name: test_tracks.csv # processed data uses same name, under processed directory
+segment_length: 300 
+midis_exist: False # there is no midi data to pair with these audio files
+

@@ -13,5 +13,5 @@ def augment_data(configs: DictConfig, wav: np.ndarray, augmentations: Augmentati
     raise ValueError('This functionality was not made yet')
 
 def generate_augmentations(configs: DictConfig) -> AugmentationData:
-    print()
+    return AugmentationData(0,0,0,0,0,0,0)
     
