@@ -1,7 +1,6 @@
 import torch
 from dataclasses import dataclass
 
-# This data augmentation pipeline comes from the Mobile-AMT paper
 # This object saves the degree which the augmentation should be/was applied
 @dataclass()
 class AugmentationData():

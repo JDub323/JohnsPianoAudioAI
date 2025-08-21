@@ -5,6 +5,7 @@ __pycache__/
 .hydra
 .pytest_cache
 .requirements_hash
+.tmp.driveupload/
 
 # local tooling
 ./update_requirements.sh

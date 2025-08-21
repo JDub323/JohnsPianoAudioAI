@@ -20,13 +20,18 @@ transform:
   f_min: 27.5 # may want to account for ralisback curve by lowering the minimum frequency by arbitrary ~15 cents (should be 27.5)
   f_max: 4186 # these are frequency minimum and maximums btw. This is not used as of 8/6/25, since n_bins and f_min dictate this
 
-normalize_audio: false
-augment_audio_data: false
+normalize_audio: false # experamental function to make all piano audios roughly the same loudness
+augment_audio_data: true
+noise_paths:
+  environmental: ./data/augmentations/environment/
+  speech: ./data/augmentations/LibriSpeech/train-clean-100/
+  RIR: ./data/augmentations/RIR/
+  DIR: ./data/augmentations/DIR_full/
 augmentation_probabilities: # THIS PIPELINE AND PROBABILITY DIST. WAS TAKEN FROM Mobile-AMT 
   pitch_shift: .5 
-  speech_noise: .5
-  environment_noise: .5 # do this before room impulse response
-  RIR_conv: 1 # room impulse response convolution
-  stationary_noise: .5
-  DIR_conv: 1 # device impulse response convolution
+  speech: .5
+  environmental: .5 # do this before room impulse response
+  RIR: 1 # room impulse response convolution
+  stationary: .5
+  DIR: 1 # device impulse response convolution
   clamp: .05 # audio clipping
