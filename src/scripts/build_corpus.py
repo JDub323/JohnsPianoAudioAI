@@ -1,4 +1,4 @@
-from scripts.utils import setup_logging
+from .utils import setup_logging
 from src.corpus.build_corpus import build_corpus
 from omegaconf import DictConfig
 import hydra

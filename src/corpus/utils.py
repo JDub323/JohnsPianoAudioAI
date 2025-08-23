@@ -116,9 +116,17 @@ def calc_duration(configs, wav, midi) -> float:
     midi_duration = midi.get_end_time()
     wav_duration = len(wav) / configs.dataset.sample_rate
 
+    # WHY BELOW IS COMMENTED OUT: if there are no notes pressed when the midi is supposed to end: that is, if there 
+    # happen to be no notes at exactly 30 seconds, then the pretty midi object will decide that 
+    # the correct duration is really 29.97 (or whatever that time was) seconds long, rather than including the 
+    # extra bit of silence at the end
+
     # test to make sure the durations are the same length (allow for some floating point error)
-    if configs.dataset.midis_exist:
-        assert abs(midi_duration - wav_duration) < 1e-6, "midi and wav files differ in length"
+    # if configs.dataset.midis_exist:
+        # length_matches = abs(midi_duration - wav_duration) < 1e-6 # roughly matches
+        # if not length_matches:
+        #     print_midi(midi)
+        # assert length_matches, f"midi length: {midi_duration} not equal to wav length: {wav_duration}"
 
     return wav_duration
 

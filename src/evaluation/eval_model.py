@@ -1,8 +1,7 @@
+# evaluation function: should be able to use the unseen test data to figure out error, confusion matrix, 
+# and other important metrics, so I know how well my model is actually performing
 
 def evaluate(config_path: str, checkpoint_path: str) -> None:
-    # load the configurations for this project
-    # config = load_config(config_path)
-
     # import the checkpoint 
 
     # load the model from the checkpoint, making sure to set to eval mode
@@ -16,3 +15,15 @@ def evaluate(config_path: str, checkpoint_path: str) -> None:
     # scores = evaluate_transcription(model, eval_loader)
 
     # for all metrics and scores, print them out
+    return
+
+def evaluate_transcription(model, eval_loader):
+    # model.eval() 
+    # with torch.no_grad():
+    #      for inputs, labels in val_loader:
+    #         # have the model make predictions
+    #         outputs = model(inputs)
+    # 
+    #         # calculate the loss function: outputs vs labels
+    #         val_loss = criterion(outputs, labels)
+    return

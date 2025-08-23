@@ -1,14 +1,12 @@
 from pathlib import Path
 from datetime import datetime
 import wandb 
-from omegaconf import DictConfig
-import hydra 
 import logging
 
 # sets up option to mute/show logging statements
 def setup_logging(configs):
     logging.basicConfig(
-        level=logging.DEBUG if configs.verbose else logging.WARNING,
+        level=logging.DEBUG if not configs.verbose else logging.WARNING,
         format="%(levelname)s: %(message)s"
     )
 

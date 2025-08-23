@@ -6,6 +6,8 @@ __pycache__/
 .pytest_cache
 .requirements_hash
 .tmp.driveupload/
+*.log 
+profile.out
 
 # local tooling
 ./update_requirements.sh
