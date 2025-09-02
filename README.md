@@ -14,11 +14,7 @@ This repository contains an **in-progress deep learning project** for **Automati
 ## 📀 Corpus Generation
 The corpus is built from the [**MAESTRO dataset**](https://magenta.tensorflow.org/datasets/maestro), which contains paired piano audio and MIDI files.  
 
-- **Data Augmentation**: Applied audio transformations inspired by the augmentation pipeline in [Audio-AMT](https://github.com/bytedance/audio-amt).  
-- **Spectrogram Options**: Supports either:
-  - Log-Mel spectrograms  
-  - Constant-Q Transform (CQT) spectrograms  
-- This setup ensures flexibility for experimenting with different input representations.  
+- **Data Augmentation**: Applied audio transformations inspired by the augmentation pipeline in [Audio-AMT](https://ieeexplore.ieee.org/document/10715008).  
 
 ---
 
@@ -52,3 +48,4 @@ This project is still in an early phase, but feedback and suggestions are welcom
 
 ## 📜 License
 TBD (to be added once the project stabilizes).
+
