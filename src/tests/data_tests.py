@@ -1,4 +1,5 @@
 import unittest
+import librosa
 from hydra import initialize, compose
 from omegaconf import DictConfig
 import os 
@@ -8,6 +9,7 @@ from src.corpus.DataAugmenter import DataAugmenter
 import sounddevice as sd
 from . import utils
 from ..corpus.utils import print_augs
+import pandas as pd
 
 class TestDataProcessing(unittest.TestCase):
 
@@ -90,19 +92,42 @@ class TestDataProcessing(unittest.TestCase):
             sd.play(aug_wav, self.cfg.dataset.sample_rate)
             sd.wait()
 
+    def test_midi_spec_size_match(self):
+        # get configs
+        self.cfg: DictConfig = compose(config_name="smalldata.yaml", overrides=['dataset.row_limit=1', 'dataset.segment_length=5'])
+        hl = self.cfg.dataset.transform.hop_length
+        sr = self.cfg.dataset.sample_rate
+
+        # get random indices so the same songs aren't played each run (I was going crazy)
+        max_val = len(utils.get_raw_data_df(self.cfg)) - 1 
+        indices = utils.generate_rand_row_indices(count=self.cfg.dataset.row_limit, max_val=max_val)
+
+        dictlist = [{}]
+
+        for duration in range(50):
+            self.cfg.dataset.segment_length = duration
+            midi_frame_count = librosa.time_to_frames(times=duration, hop_length=hl, sr=sr) + 1
+            raw_wavs = utils.get_raw_wavs(self.cfg, segment_length=duration, row_indices=indices)
+            spec = utils.get_input_vector(self.cfg, raw_wavs[0])
+            spec_frame_count = spec.shape[1]
+            dictlist.append({
+                'midi_frames': midi_frame_count,
+                'spec_frames': spec_frame_count,
+                })   
+            assert spec_frame_count == midi_frame_count
+
+        df = pd.DataFrame(dictlist)
+        print(df)
 
     # plays audio and video from before and after audio augmentations were done for 10 test tracks
     # does not run the build_corpus function, despite its name
     def test_corpus_build_quality(self):
         # get configs
-        self.cfg: DictConfig = compose(config_name="smalldata.yaml", overrides=['verbose=False'])
+        self.cfg: DictConfig = compose(config_name="smalldata.yaml") #overrides=['dataset.row_limit=1', 'dataset.segment_length=5'])
         if self.cfg.verbose: print("OVERRIDE DIDN'T WORK: VERBOSE IS TRUE")
 
         # define how long each segment should be:
-        sl = 30 # pneumonic: 'segment length'
-
-        # get configs
-        self.cfg: DictConfig = compose(config_name="smalldata.yaml")
+        sl = self.cfg.dataset.segment_length # pneumonic: 'segment length'
 
         # get random indices so the same songs aren't played each run (I was going crazy)
         # bad code: this is the third time I download the df during this test

@@ -186,7 +186,7 @@ def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
 
     # if the pretty_midi file is empty, return immediately (loop will fail otherwise)
     if not configs.dataset.midis_exist:
-        # make empty torch tensors to init a Notelabels object with
+        # make empty torch tensor to init a Notelabels object with
         blank = torch.empty(1,1)
 
         # exit the function safely
@@ -200,16 +200,17 @@ def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
     sr = configs.dataset.sample_rate
     ws = configs.dataset.transform.window_size
     hl = configs.dataset.transform.hop_length
-    frame_count = librosa.time_to_frames(times=duration, hop_length=hl, n_fft=ws, sr=sr)
-    logging.info(f'frame count: {frame_count}') # log
+    frame_count = librosa.time_to_frames(times=duration, hop_length=hl, sr=sr) + 1 # add 1 so size matches .wav spec size
+    print(f'MIDI frame count: {frame_count}') # log
 
-    fs = sr / hl # frames per second = window size / hop length 
+    fs = sr / hl # frames per second = sample rate / hop length 
     
     n_keys = 88
     onset_matrix = np.zeros((n_keys, frame_count), dtype=bool)
     activation_matrix = np.zeros((n_keys, frame_count), dtype=bool)
     velocity_matrix = np.zeros((n_keys, frame_count), dtype=np.float32)
 
+    # all piano notes are instrument 0
     for note in midi.instruments[0].notes:
         if note.pitch < 21 or note.pitch > 108:
             continue  # skip notes outside piano range
@@ -220,6 +221,7 @@ def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
 
         if onset_frame < frame_count:
             onset_matrix[pitch_index, onset_frame] = True
+        else: print('ERROR: DROPPED NOTE')
 
         activation_matrix[pitch_index, onset_frame:offset_frame] = True
         velocity = note.velocity / 127.0  # normalize
@@ -233,6 +235,13 @@ def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
     ret = NoteLabels(activation_matrix=am, onset_matrix=om, velocity_matrix=vm)
     return ret
 
+# Takes entire song, returns an array the size of segment_length
+def split_truth_tensor(labels: NoteLabels, segment_length: float=30.0):
+    return
+
+
+# deprecated function. Now, instead of splitting a pretty midi then converting all to note labels, 
+# I convert to note labels then split, since note labels are easier to split than vice versa
 def split_pretty_midi(pm: pretty_midi.PrettyMIDI, segment_length=30.0):
     segments = []
     total_time = pm.get_end_time()

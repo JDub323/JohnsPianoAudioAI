@@ -14,7 +14,7 @@ def evaluate(config_path: str, checkpoint_path: str) -> None:
     # evaluate 
     # scores = evaluate_transcription(model, eval_loader)
 
-    # for all metrics and scores, print them out
+    # for all metrics and scores, print them out and save them 
     return
 
 def evaluate_transcription(model, eval_loader):
