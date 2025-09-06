@@ -5,7 +5,6 @@
 
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from ..model.ProprietaryModel import model0
 
 # pneumonic: automatic piano transcriptor

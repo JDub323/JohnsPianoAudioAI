@@ -1,16 +1,18 @@
 import omegaconf
+from typing import List
+from pathlib import Path
 import pandas as pd
 import numpy as np
 import pretty_midi
-from librosa import power_to_db
+from librosa import load, power_to_db, time_to_frames, feature, cqt
 from os import path, makedirs
-import librosa
 from tabulate import tabulate
 import logging
 import shutil 
 import torch 
 from .datatypes import NoteLabels
 from pretty_midi.pretty_midi import PrettyMIDI
+import torch.nn.functional as F
 
 def print_data(df: pd.DataFrame) -> None:
     print("Data: ")
@@ -57,9 +59,66 @@ def clean_old_proc_dir(configs):
         shutil.rmtree(configs.dataset.export_root)
 
 # prints a raw audio augmentations dict to a nice format
-def print_augs(augs) -> None:
+def print_augs_full(augs) -> None:
     flat_dict = flatten_dict(augs)
     print(tabulate(flat_dict.items(), headers=['Key', 'Value'], tablefmt='fancy_grid'))
+
+# prints a raw audio augmentations dict to a nice format
+def print_augs_fancy(augs, augpath: str) -> None:
+    print("----------------------------------------------------")
+    print()
+    print("AUGMENTATIONS:")
+    # loop through all augmentations 
+    # remember that augs is a nested dictionary
+    for index, augdict in enumerate(augs.items()):
+        key, aug = augdict
+        if (aug['should_apply']): # only print if the augmentation was applied
+
+            # the best way I could think of to decide what to print out, based on the aug. I don't want all the info.
+            if (index == 0):
+                print(f"Pitch shifted by {aug['num_semitones']}")
+
+            elif (index == 1):
+                print("Speech Applied:")
+                print(f"  snr_db = {aug['snr_db']}")
+                print(f"  rms_db = {aug['rms_db']}")
+
+                relative_path = drop_beginning_path(full=aug['noise_file_path'], prefix=augpath)
+                print(f"  noise from = {relative_path}")
+
+            elif (index == 2):
+                print("Environment Applied:")
+                print(f"  snr_db = {aug['snr_db']}")
+                print(f"  rms_db = {aug['rms_db']}")
+
+                relative_path = drop_beginning_path(full=aug['noise_file_path'], prefix=augpath)
+                print(f"  noise from = {relative_path}")
+
+            elif (index == 3):
+                print("Room Impluse Response Applied:")
+
+                relative_path = drop_beginning_path(full=aug['ir_file_path'], prefix=augpath)
+                print(f"  noise from = {relative_path}")
+
+            elif (index == 4):
+                print("Stationary was applied")
+
+            elif (index == 5):
+                print("Device Impulse Response Applied:")
+
+                relative_path = drop_beginning_path(full=aug['ir_file_path'], prefix=augpath)
+                print(f"  noise from = {relative_path}")
+
+            elif (index == 6):
+                print("Clipping applied")
+
+            else: print("WHAT HAPPENDUH")
+
+
+def drop_beginning_path(full: str, prefix: str) -> str:
+    fullpath = Path(full)
+    prefixpath = Path(prefix)
+    return str(fullpath.relative_to(prefixpath))
 
 # returns a flattened version of an augmentations dictionary
 def flatten_dict(augs) -> dict:
@@ -96,7 +155,7 @@ def download_wav(configs, filename: str) -> np.ndarray:
     logging.info(f'Downloading {filename} audio') # log
     path_to_wav = path.join(configs.dataset.data_root, filename)
     use_mono = configs.dataset.num_channels == 1
-    ret, _ = librosa.load(path_to_wav, sr=configs.dataset.sample_rate, mono=use_mono)
+    ret, _ = load(path_to_wav, sr=configs.dataset.sample_rate, mono=use_mono)
     return ret
 
 def download_midi(configs, filename: str) -> PrettyMIDI | None:
@@ -148,6 +207,7 @@ def get_input_vector(configs, wav: np.ndarray) -> torch.Tensor:
     ws = configs.dataset.transform.window_size
     s = configs.dataset.transform.scale
     fmin = configs.dataset.transform.f_min
+    fmax = configs.dataset.transform.f_max
 
     method = configs.dataset.transform.input_representation
 
@@ -155,7 +215,7 @@ def get_input_vector(configs, wav: np.ndarray) -> torch.Tensor:
     # log-mel spectrogram
     if method == 'mel':
         # compute complex power spectrogram 
-        C = librosa.feature.melspectrogram(y=wav, sr=sr, n_fft=ws, hop_length=hl, window=wt, n_mels=nb, fmin=fmin)
+        C = feature.melspectrogram(y=wav, sr=sr, n_fft=ws, hop_length=hl, window=wt, n_mels=nb, fmin=fmin, fmax=fmax)
 
         # convert the complex, power spectrogram to log-mel
         ret = complex_to_log_spectrogram(spectro=C) 
@@ -163,7 +223,9 @@ def get_input_vector(configs, wav: np.ndarray) -> torch.Tensor:
     # constant q transform 
     elif method == 'cqt':
         # compute the constant q transform
-        C = librosa.cqt(y=wav, sr=sr, hop_length=hl, n_bins=nb, filter_scale=fs, window=wt, scale=s, fmin=fmin)
+        C = cqt(y=wav, sr=sr, hop_length=hl, n_bins=nb, filter_scale=fs, window=wt, scale=s, fmin=fmin)
+
+        #fmax is actually not used, since it uses spacing defined by the bins per octave, fmin, and n_bins
 
         # return var is 
         ret = complex_to_log_spectrogram(spectro=C)
@@ -181,7 +243,7 @@ def get_input_vector(configs, wav: np.ndarray) -> torch.Tensor:
         raise ValueError('I am too lazy to figure out how to get multiple channels in a torch tensor')
     return torch.from_numpy(ret)
 
-def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
+def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI | None, frame_count: int) -> NoteLabels:
     logging.info('Computing ground truth tensors') # log
 
     # if the pretty_midi file is empty, return immediately (loop will fail otherwise)
@@ -195,14 +257,8 @@ def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
     # otherwise, the midi object will work like normal
 
     # get data to count frames and make matrices
-    duration = midi.get_end_time()
-    
     sr = configs.dataset.sample_rate
-    ws = configs.dataset.transform.window_size
     hl = configs.dataset.transform.hop_length
-    frame_count = librosa.time_to_frames(times=duration, hop_length=hl, sr=sr) + 1 # add 1 so size matches .wav spec size
-    print(f'MIDI frame count: {frame_count}') # log
-
     fs = sr / hl # frames per second = sample rate / hop length 
     
     n_keys = 88
@@ -211,21 +267,22 @@ def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
     velocity_matrix = np.zeros((n_keys, frame_count), dtype=np.float32)
 
     # all piano notes are instrument 0
-    for note in midi.instruments[0].notes:
-        if note.pitch < 21 or note.pitch > 108:
-            continue  # skip notes outside piano range
+    if midi != None and midi.instruments: # check to make sure that there are any notes in the midi file
+        for note in midi.instruments[0].notes:
+            if note.pitch < 21 or note.pitch > 108:
+                continue  # skip notes outside piano range
 
-        pitch_index = note.pitch - 21
-        onset_frame = int(np.round(note.start * fs))
-        offset_frame = int(np.round(note.end * fs))
+            pitch_index = note.pitch - 21
+            onset_frame = int(np.round(note.start * fs))
+            offset_frame = int(np.round(note.end * fs))
 
-        if onset_frame < frame_count:
-            onset_matrix[pitch_index, onset_frame] = True
-        else: print('ERROR: DROPPED NOTE')
+            if onset_frame < frame_count:
+                onset_matrix[pitch_index, onset_frame] = True
+            else: print('ERROR: DROPPED NOTE')
 
-        activation_matrix[pitch_index, onset_frame:offset_frame] = True
-        velocity = note.velocity / 127.0  # normalize
-        velocity_matrix[pitch_index, onset_frame:offset_frame] = velocity
+            activation_matrix[pitch_index, onset_frame:offset_frame] = True
+            velocity = note.velocity / 127.0  # normalize
+            velocity_matrix[pitch_index, onset_frame] = velocity
 
     # convert to torch tensors 
     am = torch.from_numpy(activation_matrix)
@@ -235,10 +292,55 @@ def get_truth_tensor(configs, midi: pretty_midi.PrettyMIDI) -> NoteLabels:
     ret = NoteLabels(activation_matrix=am, onset_matrix=om, velocity_matrix=vm)
     return ret
 
-# Takes entire song, returns an array the size of segment_length
-def split_truth_tensor(labels: NoteLabels, segment_length: float=30.0):
-    return
+# takes an entire song of note labels and returns the labels, split
+# the last label will be padded to be of the same size as the rest of the labels (size segment_frames)
+def split_truth_tensor(labels: NoteLabels, segment_frames: int):
+    ret: List[NoteLabels] = [] # array of NoteLabels
 
+    # make array to collect all split arrays of each note label
+    truth_tensor_count = len(labels.__dict__)
+    zipper = [[] for _ in range(truth_tensor_count)] # where there is a list for each truth tensor
+    for i, entry in enumerate(labels.__dict__.items()):
+        _, tensor = entry
+
+        n_frames = tensor.size(1) # where 1 is the time axis. Can't use a const var here, since time axis changes sometimes
+
+        # split the tensor into an array of segments of length segment_frames
+        segments = [tensor[:, i:i+segment_frames] for i in range(0, n_frames, segment_frames)]
+
+        # pad the last segment
+        last_segment_len = segments[-1].shape[1]
+        segments[-1] = F.pad(segments[-1], (0, segment_frames - last_segment_len, 0, 0))
+
+        zipper[i].extend(segments)
+
+
+    print(f"the first element of zipper: {zipper[0]}")
+    zipped = list(zip(*zipper)) # take the transpose of the 2d array, since things should be grouped by index
+    print(f"the first element of zipped: {zipped[0]}")
+    
+    # now construct the notelabels object array from the zipper 
+    # yes this is hard coded, I don't plan on scaling the number of arrays any time soon
+    for group in zipped:
+        # the activation, onset, and velocity were added in insertion order from the dataclass, 
+        # so things will break if I do things in a different order, or I change the order of the dataclass...
+        ret.append(NoteLabels(activation_matrix=group[0],
+                              onset_matrix=group[1], 
+                              velocity_matrix=group[2]))
+
+    return ret
+
+
+def calc_midi_frame_count(configs, duration: float | None = None):
+    # find duration, fallback to the configs duration if it is not passed as arg (should be default)
+    if (duration == None): duration = float(configs.dataset.segment_length) # the cast is so my ide is not mad at me
+    
+    sr = configs.dataset.sample_rate
+    hl = configs.dataset.transform.hop_length
+    frame_count = time_to_frames(times=duration, hop_length=hl, sr=sr) + 1 # add 1 so size matches .wav spec size
+    logging.info(f'frame count: {frame_count}') # log
+
+    return frame_count
 
 # deprecated function. Now, instead of splitting a pretty midi then converting all to note labels, 
 # I convert to note labels then split, since note labels are easier to split than vice versa

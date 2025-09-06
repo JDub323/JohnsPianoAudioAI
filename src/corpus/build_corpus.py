@@ -1,15 +1,15 @@
 from omegaconf import DictConfig
 from typing import Any
 from pretty_midi import PrettyMIDI
+from torch import norm_except_dim
+
+from .MySharder import MySharder
 from .DataAugmenter import DataAugmenter
 from . import utils
-from src.corpus.datatypes import NoteLabels, ProcessedAudioSegment
+from .datatypes import NoteLabels, ProcessedAudioSegment
 import pandas as pd
 import numpy as np
 import os
-import librosa
-import pretty_midi.pretty_midi
-import torch
 import logging 
 
 
@@ -28,7 +28,6 @@ def build_corpus(configs: DictConfig):
     - untested splitting alignment with midi/spectrograms 
     
     Future changes:
-    - consider splitting the midi representation after converting to a 2d numpy array, since the alternative is buggy at best. 
     """
     # get the dataframe with all the files
     df_unproc = utils.get_raw_data_df(configs)
@@ -51,8 +50,8 @@ def build_corpus(configs: DictConfig):
     # make a DataAugmenter object (custom, simple, uses audiomentations lib)
     my_augmenter = DataAugmenter(configs=configs)
 
-    # make list of dicts for processed data, to be converted into a dataframe
-    list_for_proc_df = [] # pneumonic: list for processed dataframe
+    # make a sharder to handle the processed data's dataframe and uploads 
+    sharder = MySharder(configs)
 
     # for every audio file 
     for index, row in df_unproc.iterrows():
@@ -63,53 +62,51 @@ def build_corpus(configs: DictConfig):
         if utils.passed_row_limit(configs, i=index): break
 
         # download the .wav file 
-        song_wav = utils.download_wav(configs, filename=row['audio_filename'])
+        song_wav = utils.download_wav(configs, filename=str(row['audio_filename']))
+        silence = np.zeros(configs.dataset.samples_silence, dtype=song_wav.dtype)
+        song_wav = np.concatenate((song_wav, silence))
 
         # download the midi file while I am here (if it exists)
-        song_midi = utils.download_midi(configs, filename=row['midi_filename'])
+        song_midi = utils.download_midi(configs, filename=str(row['midi_filename']))
+
+        # calculate the total number of frames which will be in the entire song (excluding the padding on last frame)
+        total_frames = utils.calc_midi_frame_count(configs, duration=len(song_wav)/configs.dataset.sample_rate)
+
+        # find the number of frames per tensor
+        frames_per_segment = utils.calc_midi_frame_count(configs)
         
-        # call a split function to return a list of tuples, each with a .wav vector and 
-        # the corresponding midi object
-        segments = split_track(configs, wav=song_wav, midi=song_midi)
+        # convert the midi to a NoteLabels object happens in the following function
+        # call a split function to return a list of tuples, each with an input tensor and 
+        # the corresponding labels object
+        segments = split_and_process(configs, wav=song_wav, midi=song_midi, 
+                                     total_frames=total_frames, split_frames=frames_per_segment)
 
         # for each audio segment
         for index, segment in enumerate(segments):
             # separate the segment tuple
-            wav, midi = segment
-
-            # calculate the duration: 
-            duration = utils.calc_duration(wav=wav, midi=midi, configs=configs)
+            wav, label = segment # segment is a tuple of .wav and of NoteLabels
 
             # augment the segment audio (make it a lower quality)
-            # TODO IN func below:
-            # pad the end of the audio segment (abrupt end. remember not to train with abrupt start)
-            # this is a little off, since piano audio is slightly muffled before ending. Is it good enough?
             augmented_wav, augmentations = my_augmenter.augment_data(wav)
 
             # compute the spectrogram or NMF 
             input_tensor = utils.get_input_vector(configs, augmented_wav)
 
-            # compute the ground truth tensors (NoteLabels object) 
-            note_labels = utils.get_truth_tensor(configs, midi)
-            
             # calculate what the split should be (test, training, verification)
             split_type = calc_split(configs, row)
 
             # save the input tensor to wherever the split should be (use the seed for rng)
-            logging.info('Saving tensor') # log
-            processed_segment = ProcessedAudioSegment(model_input=input_tensor, ground_truth=note_labels)
-            save_location = calc_save_location(configs, filename=row['audio_filename'], split_type=split_type, i=index)
-            torch.save(processed_segment, os.path.join(save_location[0], save_location[1]))
+            # logging.info('Saving tensor') # log
+            processed_segment = ProcessedAudioSegment(model_input=input_tensor, ground_truth=label)
+            save_location = calc_save_location(configs, filename=str(row['audio_filename']), split_type=split_type, i=index)
+            # torch.save(processed_segment, os.path.join(save_location[0], save_location[1]))
 
-            # add the data to a list to be made into a dataframe
-            add_segment_to_df(list_for_proc_df, name=save_location[1], split=split_type, i=index,
-                              duration=duration, augs=augmentations, year=row['year'])
+            # add the data processed to the sharder
+            sharder.push(processed_segment, save_location[1], split_type, int(row['year']), augmentations)
 
-    # save the dataframe
-    logging.info('Saving dataframe') # log
-    loc = os.path.join(configs.dataset.export_root, configs.dataset.spreadsheet_name)
-    df_proc = pd.DataFrame(list_for_proc_df).reset_index(drop=True)
-    df_proc.to_csv(loc)
+    # tell the sharder that we are done giving it data, and it will upload the df and the rest of the 
+    # unfilled shards
+    sharder.done_adding_data()
 
     # save the configs used to generate the data
     logging.info('Saving configs') # log
@@ -124,8 +121,10 @@ def calc_save_location(configs, filename: str, split_type: str, i: int) -> tuple
     new_filename = os.path.basename(filename.removesuffix('.wav').removesuffix('.mp3')) + f"_Section_{i:02d}.pt"
     return (path, new_filename)
 
-def split_track(configs, wav: np.ndarray, midi) -> list[tuple]:
+# needs to return a tuple of a .wav and its corresponding NoteLabels object
+def split_and_process(configs, wav: np.ndarray, midi: PrettyMIDI | None, total_frames: int, split_frames: int) -> list[tuple]:
     logging.info('Splitting track') # log
+
     # get the wav vector
     split_size_in_samples = configs.dataset.sample_rate * configs.dataset.segment_length
     wav_arr = []
@@ -134,41 +133,16 @@ def split_track(configs, wav: np.ndarray, midi) -> list[tuple]:
         wav_arr.append(wav[:split_size_in_samples])
         wav = wav[split_size_in_samples:]
 
-    # get the midi vector
-    if midi != None:
-        midi_arr = utils.split_pretty_midi(midi, segment_length=configs.dataset.segment_length)
+    # get truth tensor now can handle "None" as 'midi' if it doesn't exist, so it is fine to not check
+    note_labels = utils.get_truth_tensor(configs, midi, frame_count=total_frames)
 
-    # handle case where there is no midi file
-    else: 
-        midi_arr = [PrettyMIDI()] * len(wav_arr) # this duplicates the same reference, which is fine since they are just filler
-
-    # logs
-    logging.info(f'midi after being split, but before getting zipped up') 
-    if configs.verbose: utils.print_midi(midi_arr[0])
-    logging.info(f'length: {len(midi_arr)}')
+    # convert the truth tensor to a NoteLabels object
+    label_arr = utils.split_truth_tensor(labels=note_labels, segment_frames=split_frames)
 
     # return a list of tuples 
-    ret = list(zip(wav_arr, midi_arr))
+    ret = list(zip(wav_arr, label_arr))
     logging.info(f'Split track into {len(ret)} segments') # log
     return ret
-
-def add_segment_to_df(dict_list: list, name: str, split: str,
-                      i: int, duration: float, year: int, augs: dict[str, dict[str, Any]]):
-    
-    # to handle the augmentations, I need to flatten the dictionary, then merge the dictionaries
-    flat_augs = utils.flatten_dict(augs)
-    
-    # note: name must have gotten rid of the path which is normally stored in maestro dataset
-    new_filename = os.path.join(split, name)
-    new_row = {
-            'split': split,
-            'filename': new_filename,
-            'duration': duration,
-            'year': year,
-            **flat_augs # merges the dictionaries flat_augs and new_row
-            }
-
-    dict_list.append(new_row)
 
 def calc_split(configs, row: pd.Series) -> str:
     if configs.dataset.use_default_splits:

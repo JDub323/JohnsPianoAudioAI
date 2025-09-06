@@ -31,6 +31,7 @@ class DataAugmenter:
         # figure out if this object should actually do anything
         self._augments_data = configs.dataset.augment_audio_data
 
+
         # save sampling rate 
         self._sample_rate = configs.dataset.sample_rate
 
@@ -85,44 +86,44 @@ class DataAugmenter:
         # I need to make 3 compose objects since audiomentations is a little bad at logging what transforms were 
         # done: if two of the same kind of transformations are done, only one of "what happened" will be saved. This 
         # is not acceptible so I make three objects and gather each of their histories. The pipeline remains in the same order
-        self.first = Compose(
-                transforms=[
-                    PitchShift(
-                            min_semitones=-0.1,
-                            max_semitones=0.1,
-                            p=configs.dataset.augmentation_probabilities.pitch_shift if enable_list[0] else 0
-                        ),
-                    AddBackgroundNoise(sounds_path=configs.dataset.noise_paths.speech,
-                           min_snr_db=0,
-                           max_snr_db=20,
-                           p=configs.dataset.augmentation_probabilities.speech if enable_list[1] else 0
-                        ),
-                    ]
-                )
-        self.second = Compose(
-                transforms=[
-                    AddBackgroundNoise(sounds_path=configs.dataset.noise_paths.environmental,
-                           min_snr_db=0,
-                           max_snr_db=20,
-                           p=configs.dataset.augmentation_probabilities.environmental if enable_list[2] else 0
-                        ),
-                    ApplyImpulseResponse(ir_path=configs.dataset.noise_paths.RIR, 
-                                         p=configs.dataset.augmentation_probabilities.RIR if enable_list[3] else 0),
-                    ]
-                )
-
-        self.third = Compose(
-                transforms=[
-                    AddGaussianSNR(
-                            min_snr_db=0,
-                            max_snr_db=20,
-                            p=configs.dataset.augmentation_probabilities.stationary if enable_list[4] else 0
-                        ),
-                    ApplyImpulseResponse(ir_path=configs.dataset.noise_paths.DIR, 
-                                         p=configs.dataset.augmentation_probabilities.DIR if enable_list[5] else 0),
-                    ClippingDistortion(p=configs.dataset.augmentation_probabilities.clamp if enable_list[6] else 0)
-                    ]
-                )
+        # self.first = Compose(
+        #         transforms=[
+        #             PitchShift(
+        #                     min_semitones=-0.1,
+        #                     max_semitones=0.1,
+        #                     p=configs.dataset.augmentation_probabilities.pitch_shift if enable_list[0] else 0
+        #                 ),
+        #             AddBackgroundNoise(sounds_path=configs.dataset.noise_paths.speech,
+        #                    min_snr_db=0,
+        #                    max_snr_db=20,
+        #                    p=configs.dataset.augmentation_probabilities.speech if enable_list[1] else 0
+        #                 ),
+        #             ]
+        #         )
+        # self.second = Compose(
+        #         transforms=[
+        #             AddBackgroundNoise(sounds_path=configs.dataset.noise_paths.environmental,
+        #                    min_snr_db=0,
+        #                    max_snr_db=20,
+        #                    p=configs.dataset.augmentation_probabilities.environmental if enable_list[2] else 0
+        #                 ),
+        #             ApplyImpulseResponse(ir_path=configs.dataset.noise_paths.RIR, 
+        #                                  p=configs.dataset.augmentation_probabilities.RIR if enable_list[3] else 0),
+        #             ]
+        #         )
+        #
+        # self.third = Compose(
+        #         transforms=[
+        #             AddGaussianSNR(
+        #                     min_snr_db=0,
+        #                     max_snr_db=20,
+        #                     p=configs.dataset.augmentation_probabilities.stationary if enable_list[4] else 0
+        #                 ),
+        #             ApplyImpulseResponse(ir_path=configs.dataset.noise_paths.DIR, 
+        #                                  p=configs.dataset.augmentation_probabilities.DIR if enable_list[5] else 0),
+        #             ClippingDistortion(p=configs.dataset.augmentation_probabilities.clamp if enable_list[6] else 0)
+        #             ]
+        #         )
 
 
     # take in a normal array and return the ndarray augmented, and the augmentations: a dictionary
@@ -148,14 +149,7 @@ class DataAugmenter:
         assert wav.dtype == np.float32 and np.all((wav>= -1.0) & (wav<= 1.0))
 
         # run the augmentation and store the new result
-        # sorry for the bad code lol
-        # TODO: fix bug here: noise is amplified when using multiple transforms like this, since 
-        # noise is calculated based on the input signal, rather than just the pure signal
-        # new_wav = self.first(wav, sample_rate=self._sample_rate)
-        # new_wav = self.second(new_wav, sample_rate=self._sample_rate)
-        # new_wav = self.third(new_wav, sample_rate=self._sample_rate)
-
-        new_wav = self.mega(wav, self._sample_rate)
+        new_wav = self.mega(wav, self._sample_rate) # pass the wav with a bit of silence through the aug pipe
 
         # save the transforms which were applied
         classes = [] 

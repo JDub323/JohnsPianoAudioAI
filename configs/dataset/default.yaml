@@ -3,8 +3,6 @@ row_limit: -1 # -1 means unbound, so it will go through all rows.
 data_root: ./data/unprocessed/maestro-v3.0.0/
 export_root: ./data/processed/
 spreadsheet_name: maestro-v3.0.0.csv # processed data uses same name, under processed directory
-use_default_splits: True
-segment_length: 30 # in seconds. Consider trying to only split on-beat, or mid-beat.
 sample_rate: 16000 
 num_channels: 1
 midis_exist: True 
@@ -22,11 +20,13 @@ transform:
 
 normalize_audio: false # experamental function to make all piano audios roughly the same loudness
 augment_audio_data: true
+samples_silence: 200000 # Audiomentations are still present, so not "silent". APX. 5 seconds
+noise_root: /mnt/c/Users/jwhal/Projects/PythonProjects/JohnsPianoAudioAI/data/augmentations # use of abs path only for debugging
 noise_paths:
-  environmental: ./data/augmentations/environment/
+  environmental: ./data/augmentations/environment_resampled/
   speech: ./data/augmentations/LibriSpeech/train-clean-100/
-  RIR: ./data/augmentations/RIR/
-  DIR: ./data/augmentations/DIR_full/
+  RIR: ./data/augmentations/RIR_resampled/
+  DIR: ./data/augmentations/DIR_full_resampled/
 augmentation_probabilities: # THIS PIPELINE AND PROBABILITY DIST. WAS TAKEN FROM Mobile-AMT 
   pitch_shift: .5 
   speech: .5
@@ -35,3 +35,8 @@ augmentation_probabilities: # THIS PIPELINE AND PROBABILITY DIST. WAS TAKEN FROM
   stationary: .5
   DIR: 1 # device impulse response convolution
   clamp: .05 # audio clipping
+
+use_default_splits: True
+segment_length: 5
+sharding:
+  samples_per_shard: 2000 # This makes around 20 shards for the whole dataset, with each shard being ~1/20 of the whole dataset

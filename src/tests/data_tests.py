@@ -8,7 +8,7 @@ from hydra.core.global_hydra import GlobalHydra
 from src.corpus.DataAugmenter import DataAugmenter
 import sounddevice as sd
 from . import utils
-from ..corpus.utils import print_augs
+from ..corpus.utils import print_augs_full, print_augs_fancy
 import pandas as pd
 
 class TestDataProcessing(unittest.TestCase):
@@ -43,6 +43,28 @@ class TestDataProcessing(unittest.TestCase):
         spec = segment.model_input.numpy()
 
         utils.plot_spec(spec, sr=self.cfg.dataset.sample_rate)
+
+    def test_build_corpus(self):
+        self.cfg: DictConfig = compose(config_name="smalldata.yaml")
+        utils.prep_spectrogram_test(self, regenerate_data=False)
+
+        # get the spectrogram, arbitrarily from the test sub-directory
+        directory = os.path.join(self.cfg.dataset.export_root, "test")
+        first_tensor = next(f for f in os.listdir(directory) if f.endswith('.pt'))
+        path = os.path.join(directory, first_tensor)
+        shard = torch.load(path, weights_only=False)
+        print("Type of 'shard': ")
+        print(type(shard))
+
+        for segment in shard:
+            spec = segment.model_input.numpy()
+
+            utils.plot_spec_and_notes(spec, sr=self.cfg.dataset.sample_rate, hop_length=self.cfg.dataset.transform.hop_length,
+                                  onset_mat=segment.ground_truth.onset_matrix, 
+                                  vel_mat=segment.ground_truth.velocity_matrix, 
+                                  down_mat=segment.ground_truth.activation_matrix 
+                                  )
+
 
     def test_custom_audio_file_spectrograms(self):
         self.cfg: DictConfig = compose(config_name="config.yaml", overrides=['dataset=testdata'])
@@ -88,7 +110,7 @@ class TestDataProcessing(unittest.TestCase):
             # play the new version and print the augmentations
             print("Now playing the augmented version")
             print("Augmentations: ")
-            print_augs(augs)
+            print_augs_full(augs)
             sd.play(aug_wav, self.cfg.dataset.sample_rate)
             sd.wait()
 
@@ -156,7 +178,44 @@ class TestDataProcessing(unittest.TestCase):
             aug_wav, augs = my_augmenter.augment_data(wav=raw_wav)
 
             # play and display the processed version, printing the augmentations to the terminal
-            print_augs(augs) 
+            print_augs_fancy(augs, self.cfg.dataset.noise_root)
             utils.play_and_display(configs=self.cfg, wav=aug_wav, labels=note_labels[i])
 
+
+    # more customizible version of the previous test (if it aint broke)
+    def test_cbq2(self):
+        # get configs
+        self.cfg: DictConfig = compose(config_name="smalldata.yaml") #overrides=['dataset.row_limit=1', 'dataset.segment_length=5'])
+        # define how long each segment should be:
+        sl = self.cfg.dataset.segment_length # pneumonic: 'segment length'
+
+        # get random indices so the same songs aren't played each run (I was going crazy)
+        # bad code: this is the third time I download the df during this test
+        max_val = len(utils.get_raw_data_df(self.cfg)) - 1 
+        indices = utils.generate_rand_row_indices(count=self.cfg.dataset.row_limit, max_val=max_val)
+
+        # generate data manually, since processed files lose audio data, making them unable to be played back
+        # this returns an array of 30-second segments from each row I am interested in 
+        raw_wavs = utils.get_raw_wavs(self.cfg, segment_length=sl, row_indices=indices)
+
+        # download the labels, and cut them to their correct size
+        note_labels = utils.download_cut_labels(self.cfg, segment_length=sl, row_indices=indices)
+
+        # make sure the two arrays have the same number of songs
+        assert len(raw_wavs) == len(note_labels)
+
+        # make data augmenter object 
+        my_augmenter = DataAugmenter(self.cfg)
+
+        # for all audio files 
+        for i, raw_wav in enumerate(raw_wavs):
+            # play and display the raw version
+            utils.play_and_display(configs=self.cfg, wav=raw_wav, labels=note_labels[i])
+
+            # calculate the processed version
+            aug_wav, augs = my_augmenter.augment_data(wav=raw_wav)
+
+            # play and display the processed version, printing the augmentations to the terminal
+            print_augs_fancy(augs, self.cfg.dataset.noise_root) 
+            utils.play_and_display(configs=self.cfg, wav=aug_wav, labels=note_labels[i])
 

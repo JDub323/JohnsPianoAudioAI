@@ -7,7 +7,7 @@ import os
 import matplotlib.pyplot as plt
 import librosa.display
 import numpy as np
-from ..corpus.utils import download_midi, download_wav, get_raw_data_df, get_truth_tensor, split_pretty_midi, get_input_vector
+from ..corpus.utils import calc_midi_frame_count, download_midi, download_wav, get_raw_data_df, get_truth_tensor, split_pretty_midi, get_input_vector
 import sounddevice as sd
 import torch
 
@@ -122,7 +122,7 @@ def download_cut_labels(configs, segment_length: int, row_indices: list[int] | N
         midi_arr = split_pretty_midi(pm=song_midi, segment_length=segment_length)
 
         # only use the first 30 second segment in the song to make labels
-        labels = get_truth_tensor(configs=configs, midi=midi_arr[0])
+        labels = get_truth_tensor(configs=configs, midi=midi_arr[0], frame_count=calc_midi_frame_count(configs=configs, midi=midi_arr[0]))
         
         ret.append(labels)
 

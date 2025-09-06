@@ -19,6 +19,17 @@ class NoteLabels():
     activation_matrix: torch.Tensor
     onset_matrix: torch.Tensor
     velocity_matrix: torch.Tensor
+    def __post_init__(self):
+            # Ensure all are torch.Tensors
+            if not isinstance(self.activation_matrix, torch.Tensor):
+                print("activ was not a torch tensor to begin with")
+                self.activation_matrix = torch.tensor(self.activation_matrix)
+            if not isinstance(self.onset_matrix, torch.Tensor):
+                print("onset was not a torch tensor to begin with")
+                self.onset_matrix = torch.tensor(self.onset_matrix)
+            if not isinstance(self.velocity_matrix, torch.Tensor):
+                print("velo was not a torch tensor to begin with")
+                self.velocity_matrix = torch.tensor(self.velocity_matrix)
 
 @dataclass()
 class ProcessedAudioSegment():
