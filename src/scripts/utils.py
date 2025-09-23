@@ -5,9 +5,12 @@ import logging
 
 # sets up option to mute/show logging statements
 def setup_logging(configs):
+    level = logging.DEBUG if configs.verbose else logging.WARNING
+
     logging.basicConfig(
-        level=logging.DEBUG if configs.verbose else logging.WARNING,
-        format="%(levelname)s: %(message)s"
+        level=level,
+        format="%(levelname)s: %(message)s",
+        force=True
     )
 
 def create_output_dir(config):

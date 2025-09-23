@@ -4,7 +4,7 @@ from pathlib import Path
 import pandas as pd
 import numpy as np
 import pretty_midi
-from librosa import load, power_to_db, time_to_frames, feature, cqt
+from librosa import load, onset, power_to_db, time_to_frames, feature, cqt
 from os import path, makedirs
 from tabulate import tabulate
 import logging
@@ -62,6 +62,14 @@ def clean_old_proc_dir(configs):
 def print_augs_full(augs) -> None:
     flat_dict = flatten_dict(augs)
     print(tabulate(flat_dict.items(), headers=['Key', 'Value'], tablefmt='fancy_grid'))
+
+# convert a NoteLabels object to a torch.Tensor batched, with channel 0 as frame, 1 as onset, 2 as velocity
+def NoteLabel_to_tensor(labels: NoteLabels) -> torch.Tensor:
+    apred = labels.activation_matrix
+    opred = labels.onset_matrix
+    vpred = labels.velocity_matrix
+
+    return torch.cat([apred, opred, vpred], dim=1)
 
 # prints a raw audio augmentations dict to a nice format
 def print_augs_fancy(augs, augpath: str) -> None:
@@ -315,9 +323,7 @@ def split_truth_tensor(labels: NoteLabels, segment_frames: int):
         zipper[i].extend(segments)
 
 
-    print(f"the first element of zipper: {zipper[0]}")
     zipped = list(zip(*zipper)) # take the transpose of the 2d array, since things should be grouped by index
-    print(f"the first element of zipped: {zipped[0]}")
     
     # now construct the notelabels object array from the zipper 
     # yes this is hard coded, I don't plan on scaling the number of arrays any time soon

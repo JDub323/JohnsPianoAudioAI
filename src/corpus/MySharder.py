@@ -20,12 +20,17 @@ class MySharder():
     waiting until the end to make the list of torch tensors one big torch tensor 
 
     """
+# TODO: save as a single torch.tensor rather than nested dictionaries of torch.tensors 
+
     def __init__(self, configs):
         # make a stack and a max value before emptying the stack
         self.max_value = configs.dataset.sharding.samples_per_shard
 
         # save export dir 
         self.export_dir = configs.dataset.export_root
+
+        # save spreadsheet name 
+        self.spreadsheet_name = configs.dataset.processed_csv_name
 
         # make list for the tensors and for the dataframe data
         self.matrix = [[],[],[]]
@@ -34,7 +39,6 @@ class MySharder():
         # other variables to keep track of 
         self.shard_counts = [0,0,0]
         self.shard_indices = [0,0,0] 
-        print("sharder initialized")
 
 
     def push(self, seg: ProcessedAudioSegment, name: str, split: str, year: int, augs):
@@ -78,19 +82,42 @@ class MySharder():
         return join(split, filename)
 
     def _force_all_uploads(self):
-        print("Uploading all")
         for key, _ in SPLIT_DICT.items():
             self._upload_shard(key)
 
+    # uploads 3 dataframes in the test, train, and validation directories respectively
     def _upload_df(self):
         # hard-coded upload for spreadsheet name
-        spreadsheet_name = "Processed_Maestro.csv"
+        splits = ['train', 'test', 'validation']
 
         # save the dataframe
-        logging.info('Saving dataframe') # log
-        loc = join(self.export_dir, spreadsheet_name)
-        df_proc = pd.DataFrame(self.dict_list).reset_index(drop=True)
-        df_proc.to_csv(loc)
+        logging.info('Saving dataframes') # log
+        for split in splits:
+            loc = join(self.export_dir, split, self.spreadsheet_name)
+            df = pd.DataFrame(self.dict_list).reset_index(drop=True)
+            df_proc = self.process_df(df, split)
+            df_proc.to_csv(loc)
+
+    def process_df(self, df: pd.DataFrame, split: str):
+        # set max str length. Any string longer is not worth keeping, since it likely has tons of useless paths
+        max_str_len = 20
+
+        # remove all rows which are not in split 'split'
+        df = pd.DataFrame(df[df["split"] == split].copy())
+
+        # remove all cols with excessively long strings
+        drop_cols = []
+        for col in df.columns:
+            if df[col].dtype == "object":  # likely strings
+                max_len = df[col].astype(str).map(len).max()
+                if max_len > max_str_len:
+                    drop_cols.append(col)
+
+        ret = df.drop(columns=drop_cols)
+
+        # return the new df
+        return ret 
+
 
     def _add_segment_to_df(self, name: str, split: str, year: int, augs):
         # to handle the augmentations, I need to flatten the dictionary, then merge the dictionaries

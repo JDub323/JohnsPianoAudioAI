@@ -43,43 +43,107 @@
 # but I think I want a wrapper for that just so I don't have to worry about details on how to use the object within 
 # this function, so it will still be a lot to do for a logger object
 
+# TODO: make sure everything is on and stays on the same device (gpu?)
+
 from omegaconf import DictConfig
+from torch.utils.data import DataLoader
+
+from .EarlyStopper import EarlyStopper
+from . import train_utils
+
+from .CheckpointManager import CheckpointManager
+from ..model.AutomaticPianoTranscriptor import APT
+import logging
+from ..corpus.MyDataset import MyDataset
+from os.path import join
+from ..evaluation import eval_model
+
+# TODO: make sure everything is on the gpu or something. IDK what is going on, all I know is that there are nasty bugs 
+# everywhere here in this code, and I need to finish asap so I can find them all in time
 
 def train(configs: DictConfig, checkpoint_path: str) -> None:
+    # init some vars 
+    num_epochs = configs.training.epochs
+
     # make data loaders for training and validation
+    data_root = configs.dataset.export_root
+    csv_name = configs.dataset.processed_csv_name
+    training_dataset = MyDataset(join(data_root, "train"), csv_name)
+    validation_dataset = MyDataset(join(data_root, "validation"), csv_name)
+    train_dl = DataLoader(training_dataset, batch_size=configs.training.batch_size, shuffle=True)
+    validation_dl = DataLoader(validation_dataset, batch_size=configs.training.batch_size, shuffle=False) # can validation be put in order?
 
     # load model from checkpoint if possible/necessary
+    checkpointer = CheckpointManager(configs)
+
+    checkpoint = None
+    try:
+        checkpoint = checkpointer.load_newest_checkpoint()
+        checkpoint_found = True
+    except:
+        checkpoint_found = False
+
+    model = APT() # custom "AutomaticPianoTranscriptor" object
+    optimizer = train_utils.get_optimizer(configs.training.optimizer, model) # This order of things might cause bugs
+    scheduler, epoch_based = train_utils.get_scheduler(configs.training.scheduler, optimizer, num_epochs)
+
+    if checkpoint_found:
+        assert checkpoint != None, "checkpoint found but not set"
+
+        # load checkpoint
+        model.load_state_dict(checkpoint['model_state_dict'])
+        optimizer.load_state_dict(state_dict=checkpoint['optimizer_state_dict'])
+        start_epoch = checkpoint['epoch'] + 1
+        loss = checkpoint['loss']
+
+    # set defaults if there was no checkpoint
+    else:
+        start_epoch = 0
+        loss = 0 # TODO: see if this is a valid value for the loss
+
+    # get loss function
+    criterion = train_utils.get_basic_loss_fxn(configs.training.loss_function)
+
+    # make an early-stopping object 
+    early_stopper = EarlyStopper(configs)
     
-    # for epoch in epochs: 
-        # for inputs, labels in data loader
-            # optimizer.zero_grad()
-            # outputs = model(inputs)
-            # loss = criterion(outputs, labels)
-            # loss.backward()
-            # optimizer.step()
+    # for all epochs, for all iterations on the dataset
+    for epoch in range(start_epoch, num_epochs): 
+        # don't forget to put the model back into training mode before training
+        model.train()
+
+        for inputs, labels in train_dl:
+            optimizer.zero_grad() # set gradient back to 0 (accumulates by default)
+            outputs = model(inputs) # forward pass the input through the model
+            loss = criterion(outputs, labels) # calculate loss
+            loss.backward() # calculate negative gradient of error function
+            optimizer.step() # apply the negative gradient (this is not exactly just addition, due to optimizer magic)
+            # step the scheduler here if loss-based
+            if not epoch_based:
+                scheduler.step()
+
             # log metrics
 
-        # disable "learning"
-        # for each batch in validation data
-            # forward pass and record validation metrics
-        # log the sum of validation metrics 
-        # save a new checkpoint if improved
+        model.eval() # disable "learning" (this is also done within the function)
+        # get the validation loss 
+        val_loss = eval_model.evaluate_and_log(model, validation_dl, criterion) 
 
-        # this can be wrapped in a function
-        # print(f"Epoch {epoch+1} done. Train loss: {running_loss/len(train_loader):.4f}, Train acc: {running_acc/len(train_loader):.4f} | Val loss: {val_loss:.4f}, Val acc: {val_acc:.4f}")
+        # save a new checkpoint if improved
+        checkpointer.save_checkpoint(epoch, model, optimizer, None, loss)
 
         # do early stopping
-        # if early stopping enabled:
-            # if the model performed better than the prev record + some minimum improvement value:
-                # patience = 0 
-            # else patience++
-            # if patience is greater than max patience:
-                # print(f"Early stopping at epoch {epoch+1}.")
-                # break
+        if early_stopper(val_loss):
+            logging.info(f"Early stopping at epoch {epoch+1}.")
+            break
 
-    # the following two lines should be their own method, called "evaluate":
-    # for each batch in test set 
-        # forward pass and record test metrics
+        # step scheduler here if epoch-based
+        if epoch_based:
+            scheduler.step()
+
+    # get the testing dataset
+    test_dataset = MyDataset(join(data_root, "test"), csv_name)
+    test_dl = DataLoader(test_dataset, batch_size=configs.training.batch_size, shuffle=False)
+    loss = eval_model.evaluate_and_log(model, test_dl, criterion)
 
     # compute and log test metrics and sample predictions
     # save final model. Final model can now be used to make predictions in real time

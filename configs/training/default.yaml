@@ -1,17 +1,24 @@
 batch_size: 16
 epochs: 100
 learning_rate: .001 
-optimizer: adam
+optimizer: adam # or SGD
 scheduler: cosine
 weight_decay: .0001 
 grad_clip: 1.0 
 
+checkpoint_dir: ./models/checkpoints/ 
+logging_dir: ./outputs/
+
 loss_function: 
-  frames: bce 
-  onsets: bce 
-  velocities: mse # or L1 loss 
+  activations: BCElogits
+  onsets: BCElogits 
+  velocities: MSE # or L1 loss 
 loss_weights:
-  frames: 1.0
+  activations: 1.0
   onsets: 2.0 
   velocities: 0.1 # typically even smaller, normalize if needed
 
+early_stopping: True
+early_stop:
+  patience: 10
+  delta: 0.0

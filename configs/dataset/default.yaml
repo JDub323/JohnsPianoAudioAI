@@ -2,7 +2,8 @@ name: MAESTRO
 row_limit: -1 # -1 means unbound, so it will go through all rows.
 data_root: ./data/unprocessed/maestro-v3.0.0/
 export_root: ./data/processed/
-spreadsheet_name: maestro-v3.0.0.csv # processed data uses same name, under processed directory
+spreadsheet_name: maestro-v3.0.0.csv 
+processed_csv_name: processed_data.csv
 sample_rate: 16000 
 num_channels: 1
 midis_exist: True 

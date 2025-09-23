@@ -9,7 +9,7 @@ from ..model.ProprietaryModel import model0
 
 # pneumonic: automatic piano transcriptor
 class APT(nn.Module):
-    def __init__(self) -> None:
+    def __init__(self):
         super().__init__()
         self.velo = model0()
         self.onset = model0()
@@ -28,4 +28,5 @@ class APT(nn.Module):
         opred = self.fc_onset(torch.cat([vpred, opred], dim=1)) # concat on the channel dimension
         apred = self.fc_activation(torch.cat([opred, apred], dim=1)) # concat on the channel dimension
 
-        return torch.cat([vpred, opred, apred], dim=1)
+        # my loss function expects the order to be activation, onset, velocity
+        return torch.cat([apred, opred, vpred], dim=1)
