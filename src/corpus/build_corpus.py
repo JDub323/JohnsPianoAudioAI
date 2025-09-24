@@ -13,6 +13,7 @@ import os
 import logging 
 
 
+# low-priority TODO: send audiomentations and fft calculations to gpu, parallelize to increase speed (it is hard)
 def build_corpus(configs: DictConfig):
     """
     Function to build the corpus. Does the following operations:

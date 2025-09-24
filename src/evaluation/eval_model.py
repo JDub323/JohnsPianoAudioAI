@@ -6,7 +6,7 @@ from ..corpus.MyDataset import MyDataset
 from torch.utils.data import DataLoader 
 from os.path import join
 import torch
-from ..training.train_utils import get_basic_loss_fxn 
+from ..training.train_utils import get_basic_loss_fxn, get_device 
 
 def evaluate(configs, data_split:str) -> None:
     # import the checkpoint 
@@ -27,29 +27,38 @@ def evaluate(configs, data_split:str) -> None:
     # get loss function
     criterion = get_basic_loss_fxn(configs.training.loss_function)
 
+    # get device 
+    device = get_device(configs)
+
     # evaluate 
-    scores = evaluate_and_log(model, eval_loader, criterion)
+    scores = evaluate_and_log(model, eval_loader, criterion, device)
 
     # for all metrics and scores, print them out and save them 
     # TODO: LOGGING
 
-def evaluate_and_log(model, eval_loader, criterion):
+def evaluate_and_log(model, eval_loader, criterion, device):
     model.eval() 
     running_loss = 0.0
     all_preds = []
     all_labels = []
 
+    # add model to device if it is not on the right device
+    model = model.to(device)
+    
     with torch.no_grad():
          for inputs, labels in eval_loader:
-            # have the model make predictions
-            outputs = model(inputs)
+             # send the inputs and labels to the gpu 
+             inputs, labels = inputs.to(device), labels.to(device)
 
-            # calculate the loss function: outputs vs labels
-            loss = criterion(outputs, labels)
+             # have the model make predictions
+             outputs = model(inputs)
+
+             # calculate the loss function: outputs vs labels
+             loss = criterion(outputs, labels)
             
-            running_loss += loss.item()
-            all_preds.append(outputs.argmax(dim=1))
-            all_labels.append(labels)
+             running_loss += loss.item()
+             all_preds.append(outputs.argmax(dim=1))
+             all_labels.append(labels)
 
 
     all_preds = torch.cat(all_preds)

@@ -4,6 +4,7 @@ import torch.optim as optim
 from torch.nn import MSELoss, Module, BCELoss
 from torch.optim.lr_scheduler import CosineAnnealingLR
 import logging 
+import torch.cuda
 
 def get_optimizer(optimizer: str, model: Module):
     # TODO: add changes in optimizer params through updating the configs file
@@ -32,6 +33,12 @@ def get_scheduler(scheduler: str, optimizer, num_epochs):
         return CosineAnnealingLR(optimizer, T_max=num_epochs), True
     else:
         raise ValueError("Invalid scheduler")
+
+def get_device(configs) -> str:
+    if torch.cuda.is_available and configs.training.use_gpu:
+        return "cuda"
+    else:
+        return "cpu"
 
 
 def log_basic_info(epoch, running_loss, train_loader, running_acc, val_loss, val_acc):

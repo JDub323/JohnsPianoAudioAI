@@ -6,6 +6,8 @@ scheduler: cosine
 weight_decay: .0001 
 grad_clip: 1.0 
 
+use_gpu: True
+
 checkpoint_dir: ./models/checkpoints/ 
 logging_dir: ./outputs/
 

@@ -43,8 +43,6 @@
 # but I think I want a wrapper for that just so I don't have to worry about details on how to use the object within 
 # this function, so it will still be a lot to do for a logger object
 
-# TODO: make sure everything is on and stays on the same device (gpu?)
-
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
@@ -57,11 +55,12 @@ import logging
 from ..corpus.MyDataset import MyDataset
 from os.path import join
 from ..evaluation import eval_model
+from .train_utils import get_device
 
-# TODO: make sure everything is on the gpu or something. IDK what is going on, all I know is that there are nasty bugs 
-# everywhere here in this code, and I need to finish asap so I can find them all in time
+def train(configs: DictConfig) -> None:
+    # get device
+    device = get_device(configs)
 
-def train(configs: DictConfig, checkpoint_path: str) -> None:
     # init some vars 
     num_epochs = configs.training.epochs
 
@@ -106,6 +105,9 @@ def train(configs: DictConfig, checkpoint_path: str) -> None:
 
     # make an early-stopping object 
     early_stopper = EarlyStopper(configs)
+
+    # add model to device
+    model = model.to(device)
     
     # for all epochs, for all iterations on the dataset
     for epoch in range(start_epoch, num_epochs): 
@@ -113,6 +115,10 @@ def train(configs: DictConfig, checkpoint_path: str) -> None:
         model.train()
 
         for inputs, labels in train_dl:
+            # add inputs and labels to gpu
+            inputs = inputs.to(device)
+            labels = labels.to(device)
+
             optimizer.zero_grad() # set gradient back to 0 (accumulates by default)
             outputs = model(inputs) # forward pass the input through the model
             loss = criterion(outputs, labels) # calculate loss
@@ -140,7 +146,7 @@ def train(configs: DictConfig, checkpoint_path: str) -> None:
         if epoch_based:
             scheduler.step()
 
-    # get the testing dataset
+    # test the model on test dataset
     test_dataset = MyDataset(join(data_root, "test"), csv_name)
     test_dl = DataLoader(test_dataset, batch_size=configs.training.batch_size, shuffle=False)
     loss = eval_model.evaluate_and_log(model, test_dl, criterion)
