@@ -39,7 +39,15 @@ def get_device(configs) -> str:
         return "cuda"
     else:
         return "cpu"
-
+    
+def get_grad_norm(model, norm_type=2):
+    total_norm = 0.0
+    parameters = [p for p in model.parameters() if p.grad is not None]
+    for p in parameters:
+        param_norm = p.grad.data.norm(norm_type)
+        total_norm += param_norm.item() ** norm_type
+    total_norm = total_norm ** (1.0 / norm_type)
+    return total_norm
 
 def log_basic_info(epoch, running_loss, train_loader, running_acc, val_loss, val_acc):
     logging.info(f"Epoch {epoch+1} done. Train loss: {running_loss/len(train_loader):.4f}, Train acc: {running_acc/len(train_loader):.4f} | Val loss: {val_loss:.4f}, Val acc: {val_acc:.4f}")

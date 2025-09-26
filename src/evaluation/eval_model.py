@@ -31,12 +31,15 @@ def evaluate(configs, data_split:str) -> None:
     device = get_device(configs)
 
     # evaluate 
-    scores = evaluate_and_log(model, eval_loader, criterion, device)
+    scores = dynamic_eval(model, eval_loader, criterion, device)
 
     # for all metrics and scores, print them out and save them 
     # TODO: LOGGING
 
-def evaluate_and_log(model, eval_loader, criterion, device):
+# dynamic since it uses model, dataloader, criterion, and device which already exist as variables
+# RETURN TYPE: tuple of a float which is the average loss output by the eval, and two lists of torch tensors,
+# which have their tensors concatenated through the channel dimension in alphabetical order
+def dynamic_eval(model, eval_loader, criterion, device):
     model.eval() 
     running_loss = 0.0
     all_preds = []
@@ -57,7 +60,7 @@ def evaluate_and_log(model, eval_loader, criterion, device):
              loss = criterion(outputs, labels)
             
              running_loss += loss.item()
-             all_preds.append(outputs.argmax(dim=1))
+             all_preds.append(outputs)
              all_labels.append(labels)
 
 
@@ -66,4 +69,4 @@ def evaluate_and_log(model, eval_loader, criterion, device):
 
     avg_loss = running_loss / len(eval_loader)
 
-    return avg_loss
+    return avg_loss, all_labels, all_preds

@@ -13,6 +13,9 @@ experiment:
   debug: true 
   use_wandb: true
 
+evaluation:
+  tolerance: .05 # how innacurate my onset predictions can be, in millis. Used when calculating metrics only
+
 hydra:
   run:
     dir: .

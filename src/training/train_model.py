@@ -46,6 +46,8 @@
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
+from .MyLogger import TrainingLogger
+
 from .EarlyStopper import EarlyStopper
 from . import train_utils
 
@@ -55,7 +57,7 @@ import logging
 from ..corpus.MyDataset import MyDataset
 from os.path import join
 from ..evaluation import eval_model
-from .train_utils import get_device
+from .train_utils import get_device, get_grad_norm
 
 def train(configs: DictConfig) -> None:
     # get device
@@ -63,6 +65,8 @@ def train(configs: DictConfig) -> None:
 
     # init some vars 
     num_epochs = configs.training.epochs
+    tolerance = configs.evaluation.tolerance
+    fs = 1 / configs.dataset.transform.hop_length 
 
     # make data loaders for training and validation
     data_root = configs.dataset.export_root
@@ -70,7 +74,7 @@ def train(configs: DictConfig) -> None:
     training_dataset = MyDataset(join(data_root, "train"), csv_name)
     validation_dataset = MyDataset(join(data_root, "validation"), csv_name)
     train_dl = DataLoader(training_dataset, batch_size=configs.training.batch_size, shuffle=True)
-    validation_dl = DataLoader(validation_dataset, batch_size=configs.training.batch_size, shuffle=False) # can validation be put in order?
+    validation_dl = DataLoader(validation_dataset, batch_size=configs.training.batch_size, shuffle=False)
 
     # load model from checkpoint if possible/necessary
     checkpointer = CheckpointManager(configs)
@@ -94,17 +98,23 @@ def train(configs: DictConfig) -> None:
         optimizer.load_state_dict(state_dict=checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
         loss = checkpoint['loss']
+        global_step = checkpoint['global_step']
+        best_f1 = checkpoint['best_f1']
 
     # set defaults if there was no checkpoint
     else:
         start_epoch = 0
         loss = 0 # TODO: see if this is a valid value for the loss
+        global_step = 0
 
     # get loss function
     criterion = train_utils.get_basic_loss_fxn(configs.training.loss_function)
 
     # make an early-stopping object 
     early_stopper = EarlyStopper(configs)
+
+    # make a logging object
+    logger = TrainingLogger(configs, start_epoch, global_step, loss)
 
     # add model to device
     model = model.to(device)
@@ -120,22 +130,34 @@ def train(configs: DictConfig) -> None:
             labels = labels.to(device)
 
             optimizer.zero_grad() # set gradient back to 0 (accumulates by default)
+
             outputs = model(inputs) # forward pass the input through the model
             loss = criterion(outputs, labels) # calculate loss
+
             loss.backward() # calculate negative gradient of error function
+            grad_norm = get_grad_norm(model) # calculation for logging
+
             optimizer.step() # apply the negative gradient (this is not exactly just addition, due to optimizer magic)
+            global_step += 1 # increment the global step for each time the optimizer is called
+
             # step the scheduler here if loss-based
             if not epoch_based:
                 scheduler.step()
 
             # log metrics
+            logger.log_time()
+            lr = scheduler.get_last_lr()[0]
+            logger.step(loss, lr, grad_norm)
+            logger.log_time()
 
         model.eval() # disable "learning" (this is also done within the function)
-        # get the validation loss 
-        val_loss = eval_model.evaluate_and_log(model, validation_dl, criterion) 
+        # get the validation loss, y_pred, and y_true
+        val_loss, y_true, y_pred = eval_model.dynamic_eval(model, validation_dl, criterion, device) 
+
+        logger.log_epoch_metrics(val_loss, y_true, y_pred, tolerance, fs)
 
         # save a new checkpoint if improved
-        checkpointer.save_checkpoint(epoch, model, optimizer, None, loss)
+        checkpointer.save_checkpoint(epoch, model, optimizer, None, loss, global_step)
 
         # do early stopping
         if early_stopper(val_loss):
@@ -149,9 +171,12 @@ def train(configs: DictConfig) -> None:
     # test the model on test dataset
     test_dataset = MyDataset(join(data_root, "test"), csv_name)
     test_dl = DataLoader(test_dataset, batch_size=configs.training.batch_size, shuffle=False)
-    loss = eval_model.evaluate_and_log(model, test_dl, criterion)
+    test_loss, y_true, y_pred = eval_model.dynamic_eval(model, test_dl, criterion, device)
 
     # compute and log test metrics and sample predictions
-    # save final model. Final model can now be used to make predictions in real time
+    # Final model can now be used to make predictions in real time. you can get it from the checkpoint probably
+    logger.log_epoch_metrics(test_loss, y_true, y_pred, tolerance, fs)
+    logger.log_histograms(model)
+    logger.close()
 
     return

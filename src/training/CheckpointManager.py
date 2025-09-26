@@ -32,16 +32,15 @@ class CheckpointManager():
         logging.info(f"Loading checkpoint: {directory}")
         return checkpoint
 
-    def save_checkpoint(self, epoch: int, model, optimizer, scheduler, loss):
+    def save_checkpoint(self, epoch: int, model, optimizer, scheduler, loss, global_step):
         checkpoint = {
           "epoch": epoch,
           "model_state_dict": model.state_dict(),
           "optimizer_state_dict": optimizer.state_dict(),
           "scheduler_state_dict": scheduler.state_dict(),  # if you use one
           "loss": loss,
-          # (optional) anything else you want to track
+          "global_step": global_step,
         }
         torch.save(checkpoint, self.checkpoint_dir)
-        
 
 
