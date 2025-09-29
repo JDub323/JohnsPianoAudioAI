@@ -11,6 +11,7 @@ import pandas as pd
 import numpy as np
 import os
 import logging 
+import pdb
 
 
 # low-priority TODO: send audiomentations and fft calculations to gpu, parallelize to increase speed (it is hard)
@@ -33,12 +34,16 @@ def build_corpus(configs: DictConfig):
     # get the dataframe with all the files
     df_unproc = utils.get_raw_data_df(configs)
 
+    # start debugging
+    pdb.set_trace()
+
     # clean up the dataframe (get rid of any null rows, unneeded cols, etc.)
     # pneumonic: dataframe, unprocessed
     df_unproc = utils.clean_df(df_unproc, configs)
     if configs.verbose: utils.print_data(df_unproc)
 
     # delete the old processed data (if it exists)
+    # update: this function now gets user confirmation before deleting a directory
     utils.clean_old_proc_dir(configs)
 
     # add the folder back

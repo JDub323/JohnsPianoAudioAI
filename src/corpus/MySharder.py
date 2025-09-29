@@ -1,3 +1,21 @@
+# IMPORTANT STATS RELATED TO SHARDING:
+# let sample mean one 5 second spectrogram segment
+# songs = 50 (~3.92 % of the total database size)
+# total songs in db = 1277
+# total samples = 5536 
+# total memory, processed = .757 GB
+# estimated memory, unprocessed = 7 GB
+
+# ~0.3 GB per shard at 2000 samples per shard (with 5 second samples, 88 freq bins, hop length = 512)
+# average samples per song = 110 (meaning each song averages 550 seconds, or about 9 minutes)
+# memory per song after processing = ~16 mb
+# projected total processed data memory = 20 GB
+# average time to process one song = appx 6 seconds (see if I can speed this up)
+# processing ratio (seconds to process / seconds audio) = ~ 1/92
+# memory ratio (gb data processed / gb data unprocessed) = ~ 1/10
+# estimated total time to process = 2 hours 7 minutes # at 6 seconds per song
+
+
 from torch import save
 import pandas as pd
 import logging
@@ -40,13 +58,27 @@ class MySharder():
         self.shard_counts = [0,0,0]
         self.shard_indices = [0,0,0] 
 
+    # need to call this on an object which has been initialized with:
+    # sharder = MySharder.__new__(MySharder)
+    def manual_create(self, max_value, export_dir, spreadsheet_name):
+        """Initialize object manually without Hydra configs."""
+        self.max_value = max_value
+        self.export_dir = export_dir
+        self.spreadsheet_name = spreadsheet_name
+
+        # Reset working data structures
+        self.matrix = [[], [], []]
+        self.dict_list = []
+
+        self.shard_counts = [0, 0, 0]
+        self.shard_indices = [0, 0, 0]
+        
 
     def push(self, seg: ProcessedAudioSegment, name: str, split: str, year: int, augs):
         split_list = self.matrix[SPLIT_DICT[split]]
 
         # add the next element to the stack
         split_list.append(seg)
-
         # update the dataframe
         self._add_segment_to_df(name, split, year, augs)
 
@@ -56,6 +88,8 @@ class MySharder():
         # call upload if the element count is greater than or equal to the max value
         if len(split_list) >= self.max_value:
             self._upload_shard(split)
+            split_list.clear() # remove all elements from split list after usage
+            
 
     def _upload_shard(self, split: str):
         split_enum = SPLIT_DICT[split]
@@ -76,7 +110,7 @@ class MySharder():
     def _calc_filename(self, split: str):
         split_enum = SPLIT_DICT[split]
         shard_num = self.shard_counts[split_enum]
-        filename = f"{split}_shard{shard_num: 03d}.pt"
+        filename = f"{split}_shard{shard_num:03d}.pt"
 
         # add in the path to the correct directory
         return join(split, filename)

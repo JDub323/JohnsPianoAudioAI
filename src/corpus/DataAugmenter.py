@@ -138,7 +138,7 @@ class DataAugmenter:
             # DIR_conv: # device impulse response convolution
             # clamp: # audio clipping
 
-        logging.info('Augmenting data') # log
+        # logging.info('Augmenting data') # log
 
         # if not going to augment data, return
         if not self._augments_data:

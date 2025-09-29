@@ -55,8 +55,27 @@ def add_processed_data_folders(configs):
 
 def clean_old_proc_dir(configs):
     if path.exists(configs.dataset.export_root):
-        logging.info(f"Deleting old processed data directory: {configs.dataset.export_root}") # log
-        shutil.rmtree(configs.dataset.export_root)
+        print("Processed data directory exists and is not empty.")
+        print(f"Do you want to delete directory: {configs.dataset.export_root}?")
+        consent_to_delete = get_user_confirmation()
+        
+        if consent_to_delete:
+            logging.info(f"Deleting old processed data directory: {configs.dataset.export_root}") # log
+            shutil.rmtree(configs.dataset.export_root)
+        else:
+            logging.info(f"Shutting down corpus build.")
+            exit(0)
+
+def get_user_confirmation(prompt="Confirm? (y/n): "):
+    """Prompt the user for a yes/no confirmation and return True/False."""
+    while True:
+        response = input(prompt).strip().lower()
+        if response in ("y", "yes"):
+            return True
+        elif response in ("n", "no"):
+            return False
+        else:
+            print("Please enter 'y' or 'n'.")
 
 # prints a raw audio augmentations dict to a nice format
 def print_augs_full(augs) -> None:
@@ -171,7 +190,7 @@ def download_midi(configs, filename: str) -> PrettyMIDI | None:
         logging.info('Downloading midi') # log
         path_to_midi = path.join(configs.dataset.data_root, filename)
         ret = pretty_midi.PrettyMIDI(path_to_midi)
-        if configs.verbose: print_midi(ret)
+        # if configs.verbose: print_midi(ret)
         # note that song_midi can either be a mono np.ndarray or stereo, depending on configs
     # make sure song midi is bound
     else: ret = None
@@ -204,7 +223,7 @@ def save_configs(configs) -> None:
     logging.info('Configs saved!')
 
 def get_input_vector(configs, wav: np.ndarray) -> torch.Tensor:
-    logging.info('Computing input tensor') # log
+    # logging.info('Computing input tensor') # log
 
     # gather the configs 
     sr = configs.dataset.sample_rate
