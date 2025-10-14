@@ -9,11 +9,11 @@
 # ~0.3 GB per shard at 2000 samples per shard (with 5 second samples, 88 freq bins, hop length = 512)
 # average samples per song = 110 (meaning each song averages 550 seconds, or about 9 minutes)
 # memory per song after processing = ~16 mb
-# projected total processed data memory = 20 GB
+# projected total processed data memory = 20 GB (from about 200GB)
 # average time to process one song = appx 6 seconds (see if I can speed this up)
 # processing ratio (seconds to process / seconds audio) = ~ 1/92
 # memory ratio (gb data processed / gb data unprocessed) = ~ 1/10
-# estimated total time to process = 2 hours 7 minutes # at 6 seconds per song
+# estimated total time to process = 2 hours 7 minutes # at 6 seconds per song, previously had slowdown after some processing
 
 
 from torch import save

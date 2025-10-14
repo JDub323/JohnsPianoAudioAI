@@ -4,7 +4,7 @@ import pandas as pd
 import torch
 from torch.utils.data import Dataset
 from pathlib import Path
-from utils import NoteLabel_to_tensor
+from .utils import NoteLabel_to_tensor
 from .datatypes import NoteLabels, ProcessedAudioSegment
 
 class MyDataset(Dataset):
@@ -23,16 +23,21 @@ class MyDataset(Dataset):
         return len(self.df)
 
     def __getitem__(self, idx) -> tuple[torch.Tensor, torch.Tensor]:
-        # download ProcessedAudioSegment object with torch
-        row = self.df.iloc[idx]
-        shard_idx, local_idx = int(row['shard_idx']), int(row['local_idx'])
+        try:
+            # download ProcessedAudioSegment object with torch
+            row = self.df.iloc[idx]
+            # TODO: fix below
+            shard_idx, local_idx = int(row['shard_number']), int(row['shard_index'])
 
-        shard = self._get_shard(shard_idx) # index of the shard different from index of the item trying to access
-        item = shard[local_idx]
+            shard = self._get_shard(shard_idx) # index of the shard different from index of the item trying to access
+            item = shard[local_idx]
 
-        # return a tuple rather than a ProcessedAudioSegment object
-        # must convert the notelabel to a torch tensor object
-        return item.model_input, NoteLabel_to_tensor(item.ground_truth)
+            # return a tuple rather than a ProcessedAudioSegment object
+            # must convert the notelabel to a torch tensor object
+            return item.model_input, NoteLabel_to_tensor(item.ground_truth)
+        except Exception as e:
+            print(f"[DEBUG] Error at index {idx}")
+            raise
 
     def _get_shard(self, shard_idx) -> list[ProcessedAudioSegment]:
         if self._cached_shard_idx == shard_idx:

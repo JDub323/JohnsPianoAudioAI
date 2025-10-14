@@ -43,6 +43,17 @@
 # but I think I want a wrapper for that just so I don't have to worry about details on how to use the object within 
 # this function, so it will still be a lot to do for a logger object
 
+# TESTING: I started the training program at 11:00, and fixed all bugs before then. takes about 6-7 minutes to start training.
+# the longest portion of the startup is the imports, but making the optimizer takes a second. Obviously, training takes much
+# longer than everything else. I think that my biggest bottleneck is actually disc I/O, since on task manager, it says I am using
+# 1% of my GPU. I did 10 cycles in about 10 minutes, so it will take about 517 hours to run this entire program, or about 5 hours
+# for one epoch with 100 rows processed
+# at 11:32, I am at cycle 18
+# at 12:20, I am at cycle 57
+# at 12:29, I am at cycle 58 (closed laptop, program halted but didn't quit)
+# at 2:52 am the next day, I am at cycle 136. I do not know how this happened.
+# quit at cycle 141 at 3:00 am
+
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
 
@@ -58,9 +69,14 @@ from ..corpus.MyDataset import MyDataset
 from os.path import join
 from ..evaluation import eval_model
 from .train_utils import get_device, get_grad_norm
+import torch 
+from src.corpus.datatypes import ProcessedAudioSegment, NoteLabels
+from .loss_wrapper import LossWrapper
+import pdb
 
 def train(configs: DictConfig) -> None:
     # get device
+    print("getting device")
     device = get_device(configs)
 
     # init some vars 
@@ -68,7 +84,11 @@ def train(configs: DictConfig) -> None:
     tolerance = configs.evaluation.tolerance
     fs = 1 / configs.dataset.transform.hop_length 
 
+    # allow the loading of my shards
+    torch.serialization.add_safe_globals([ProcessedAudioSegment, NoteLabels])
+
     # make data loaders for training and validation
+    print("Dataloaders made")
     data_root = configs.dataset.export_root
     csv_name = configs.dataset.processed_csv_name
     training_dataset = MyDataset(join(data_root, "train"), csv_name)
@@ -78,17 +98,23 @@ def train(configs: DictConfig) -> None:
 
     # load model from checkpoint if possible/necessary
     checkpointer = CheckpointManager(configs)
+    print("made checkpointer")
 
     checkpoint = None
     try:
         checkpoint = checkpointer.load_newest_checkpoint()
         checkpoint_found = True
+        print("loaded checkpoint")
     except:
         checkpoint_found = False
+        print("No checkpoint found. Starting from scratch")
 
     model = APT() # custom "AutomaticPianoTranscriptor" object
+    print("made model")
     optimizer = train_utils.get_optimizer(configs.training.optimizer, model) # This order of things might cause bugs
+    print("made optmizer")
     scheduler, epoch_based = train_utils.get_scheduler(configs.training.scheduler, optimizer, num_epochs)
+    print("made scheduler")
 
     if checkpoint_found:
         assert checkpoint != None, "checkpoint found but not set"
@@ -97,30 +123,36 @@ def train(configs: DictConfig) -> None:
         model.load_state_dict(checkpoint['model_state_dict'])
         optimizer.load_state_dict(state_dict=checkpoint['optimizer_state_dict'])
         start_epoch = checkpoint['epoch'] + 1
-        loss = checkpoint['loss']
+        best_loss = checkpoint['loss']
         global_step = checkpoint['global_step']
         best_f1 = checkpoint['best_f1']
 
     # set defaults if there was no checkpoint
     else:
         start_epoch = 0
-        loss = 0 # TODO: see if this is a valid value for the loss
+        
+        best_loss = float('inf')
         global_step = 0
 
     # get loss function
-    criterion = train_utils.get_basic_loss_fxn(configs.training.loss_function)
+    criterion = LossWrapper(configs)
+    print("got loss function")
 
     # make an early-stopping object 
-    early_stopper = EarlyStopper(configs)
+    early_stopper = EarlyStopper(configs, best_score=best_loss)
+    print("made early stopper")
 
     # make a logging object
-    logger = TrainingLogger(configs, start_epoch, global_step, loss)
+    logger = TrainingLogger(configs, start_epoch, global_step, best_loss)
+    print("made a logger")
 
     # add model to device
     model = model.to(device)
+    print(f"put model on device: {device}")
     
     # for all epochs, for all iterations on the dataset
     for epoch in range(start_epoch, num_epochs): 
+        print(f"starting epoch {epoch} out of {num_epochs}")
         # don't forget to put the model back into training mode before training
         model.train()
 
@@ -139,6 +171,7 @@ def train(configs: DictConfig) -> None:
 
             optimizer.step() # apply the negative gradient (this is not exactly just addition, due to optimizer magic)
             global_step += 1 # increment the global step for each time the optimizer is called
+            print(f"completed training cycle {global_step}")
 
             # step the scheduler here if loss-based
             if not epoch_based:
@@ -149,7 +182,10 @@ def train(configs: DictConfig) -> None:
             lr = scheduler.get_last_lr()[0]
             logger.step(loss, lr, grad_norm)
             logger.log_time()
+            if global_step >= 5:
+                break
 
+        break
         model.eval() # disable "learning" (this is also done within the function)
         # get the validation loss, y_pred, and y_true
         val_loss, y_true, y_pred = eval_model.dynamic_eval(model, validation_dl, criterion, device) 
@@ -167,6 +203,8 @@ def train(configs: DictConfig) -> None:
         # step scheduler here if epoch-based
         if epoch_based:
             scheduler.step()
+
+    return 
 
     # test the model on test dataset
     test_dataset = MyDataset(join(data_root, "test"), csv_name)

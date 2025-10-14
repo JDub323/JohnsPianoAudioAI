@@ -8,6 +8,7 @@ import torch
 import logging 
 import os
 import glob
+import torch
 
 class CheckpointManager():
     def __init__(self, configs):
@@ -39,6 +40,7 @@ class CheckpointManager():
           "optimizer_state_dict": optimizer.state_dict(),
           "scheduler_state_dict": scheduler.state_dict(),  # if you use one
           "loss": loss,
+          # TODO: fix below
           "global_step": global_step,
         }
         torch.save(checkpoint, self.checkpoint_dir)

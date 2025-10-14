@@ -13,6 +13,9 @@ import os
 import logging 
 import pdb
 
+# TEST: make 100 rows, started the code at 2:25pm, started processing at 2:29pm
+# looking like around 27 seconds per row on average. Done around 3:15pm or a bit before, so around 27 seconds to 
+# process each row. With this speed, it will take approximately 9 HOURS. Consider multithreading. 
 
 # low-priority TODO: send audiomentations and fft calculations to gpu, parallelize to increase speed (it is hard)
 def build_corpus(configs: DictConfig):
@@ -35,7 +38,7 @@ def build_corpus(configs: DictConfig):
     df_unproc = utils.get_raw_data_df(configs)
 
     # start debugging
-    pdb.set_trace()
+    # pdb.set_trace()
 
     # clean up the dataframe (get rid of any null rows, unneeded cols, etc.)
     # pneumonic: dataframe, unprocessed
@@ -136,7 +139,13 @@ def split_and_process(configs, wav: np.ndarray, midi: PrettyMIDI | None, total_f
     wav_arr = []
     while len(wav) != 0:
         # pop the front of the wav file
-        wav_arr.append(wav[:split_size_in_samples])
+        front_frame = wav[:split_size_in_samples]
+        
+        # make sure the front frame has the right size 
+        if len(front_frame) < split_size_in_samples:
+            front_frame = np.pad(front_frame, (0, split_size_in_samples - len(front_frame)), "constant")
+
+        wav_arr.append(front_frame)
         wav = wav[split_size_in_samples:]
 
     # get truth tensor now can handle "None" as 'midi' if it doesn't exist, so it is fine to not check

@@ -1,6 +1,6 @@
 
 class EarlyStopper:
-    def __init__(self, configs):
+    def __init__(self, configs, best_score):
         self.patience = configs.training.early_stop.patience
         self.delta = configs.training.early_stop.delta
         self.best_score = None

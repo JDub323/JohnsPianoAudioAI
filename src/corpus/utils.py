@@ -84,11 +84,11 @@ def print_augs_full(augs) -> None:
 
 # convert a NoteLabels object to a torch.Tensor batched, with channel 0 as frame, 1 as onset, 2 as velocity
 def NoteLabel_to_tensor(labels: NoteLabels) -> torch.Tensor:
-    apred = labels.activation_matrix
-    opred = labels.onset_matrix
-    vpred = labels.velocity_matrix
+    apred = labels.activation_matrix.unsqueeze(0)
+    opred = labels.onset_matrix.unsqueeze(0)
+    vpred = labels.velocity_matrix.unsqueeze(0)
 
-    return torch.cat([apred, opred, vpred], dim=1)
+    return torch.cat([apred, opred, vpred], dim=0)
 
 # prints a raw audio augmentations dict to a nice format
 def print_augs_fancy(augs, augpath: str) -> None:
@@ -327,6 +327,8 @@ def split_truth_tensor(labels: NoteLabels, segment_frames: int):
     # make array to collect all split arrays of each note label
     truth_tensor_count = len(labels.__dict__)
     zipper = [[] for _ in range(truth_tensor_count)] # where there is a list for each truth tensor
+
+    # for each tensor in notelabels object
     for i, entry in enumerate(labels.__dict__.items()):
         _, tensor = entry
 

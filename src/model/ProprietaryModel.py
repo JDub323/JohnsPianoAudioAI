@@ -43,9 +43,11 @@ class model0(nn.Module):
             in_ch = out_ch
         self.conv_stack = nn.Sequential(*convs)
 
+        csos = (16, 128, 11, 157) # pneumonic: conv_stack_output_shape
+
         # After conv: (batch, C, F', T) → reshape for GRU
         self.rnn = nn.GRU(
-            input_size=freq_bins * in_ch,  # flatten freq × channels
+            input_size=csos[2] * csos[1],  # flatten freq × channels
             hidden_size=rnn_hidden,
             num_layers=num_gru_layers,
             batch_first=True,
@@ -55,13 +57,23 @@ class model0(nn.Module):
         # Output: one channel per note (freq bin)
         self.fc = nn.Linear(rnn_hidden, freq_bins)
 
-def forward(self, x):
-        # x: (batch, 1, freq_bins, time_frames)
+    def forward(self, x):
+        # breakpoint()
+        # with settings of 10/1/2025, the size of x is [16, 88, 157]
+        # since I need to reshape x, I will add the following line to add the channel dimension:
+        x = x.unsqueeze(1)
+
+        # x is now: (batch, 1, freq_bins, time_frames)
         x = self.conv_stack(x)   # (B, C, F, T')
+        
+        # x is now: (batch, 128, 11, 157) after going through the cnn stack
         B, C, F, T = x.shape
         x = x.permute(0, 3, 1, 2).contiguous()  # (B, T, C, F)
+
+        # x is now: (B, T, C, F) = (16, 157, 128, 11)
         x = x.view(B, T, C * F)  # flatten for GRU
 
+        # x is now: (16, 157, 1408 = 128 * 11)
         out, _ = self.rnn(x)  # (B, T, H)
         out = self.fc(out)    # (B, T, freq_bins)
         out = out.permute(0, 2, 1)  # (B, F, T) → matches spectrogram

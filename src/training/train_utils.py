@@ -8,7 +8,7 @@ import torch.cuda
 
 def get_optimizer(optimizer: str, model: Module):
     # TODO: add changes in optimizer params through updating the configs file
-    if (optimizer == "Adam"):
+    if (optimizer == "adam"):
         return optim.Adam(model.parameters())
     elif (optimizer == "SGD"):
         return optim.SGD(model.parameters())

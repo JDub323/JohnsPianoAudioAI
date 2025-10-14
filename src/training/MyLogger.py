@@ -1,22 +1,39 @@
+from datetime import datetime
 import torch
 from torch.utils.tensorboard import SummaryWriter
 from ..evaluation import calc_metrics
 import time
 import psutil
 import GPUtil
+import os 
 
 # class written by chatgpt, edited by me
 class TrainingLogger:
     # need all of these vars on init because I need to be able to run the logger from any checkpoint
     # TODO: make sure checkpoints save all this data. Consider making a struct
     def __init__(self, configs, epoch, global_step, best_val_loss):
-        self.writer = SummaryWriter(log_dir=configs.training.logging_dir)
+        # init the var "self.base_dir" and make directories for the logs, plots, and predicitons for the base dir
+        self.set_tensorboard_base_dir(configs)
+
+        self.writer = SummaryWriter(log_dir=f"{self.base_dir}/logs")
         self.global_step = global_step # total number of optimizer steps since the start of training
         self.epoch = epoch
         self.best_val_loss = best_val_loss
         self.num_labels = 88 # there are 88 piano keys. This will never change in the project
 
         self.start_time = time.time()
+
+    def set_tensorboard_base_dir(self, configs, run_name: str | None = None):
+        if (run_name == None): 
+            now = datetime.now()
+            formatted = now.strftime("%Y-%m-%d_%H-%M-%S")
+            run_name = "run_" + formatted
+
+        self.base_dir = os.path.join(str(configs.training.logging_dir), run_name)
+        os.makedirs(f"{self.base_dir}", exist_ok=False)
+        os.makedirs(f"{self.base_dir}/logs", exist_ok=True)
+        os.makedirs(f"{self.base_dir}/plots", exist_ok=True)
+        os.makedirs(f"{self.base_dir}/predictions", exist_ok=True)
 
     def step(self, loss: torch.Tensor, lr: float, grad_norm: float):
         """Log per training step."""
