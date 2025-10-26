@@ -185,7 +185,6 @@ def train(configs: DictConfig) -> None:
             if global_step >= 5:
                 break
 
-        break
         model.eval() # disable "learning" (this is also done within the function)
         # get the validation loss, y_pred, and y_true
         val_loss, y_true, y_pred = eval_model.dynamic_eval(model, validation_dl, criterion, device) 
@@ -193,6 +192,7 @@ def train(configs: DictConfig) -> None:
         logger.log_epoch_metrics(val_loss, y_true, y_pred, tolerance, fs)
 
         # save a new checkpoint if improved
+        # TODO: update loss to make it average, innstead of the most recent 
         checkpointer.save_checkpoint(epoch, model, optimizer, None, loss, global_step)
 
         # do early stopping

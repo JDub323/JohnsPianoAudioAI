@@ -39,7 +39,7 @@ def evaluate(configs, data_split:str) -> None:
 # dynamic since it uses model, dataloader, criterion, and device which already exist as variables
 # RETURN TYPE: tuple of a float which is the average loss output by the eval, and two lists of torch tensors,
 # which have their tensors concatenated through the channel dimension in alphabetical order
-def dynamic_eval(model, eval_loader, criterion, device):
+def dynamic_eval(model, eval_loader, criterion, device) -> tuple[float, torch.Tensor, torch.Tensor]:
     model.eval() 
     running_loss = 0.0
     all_preds = []

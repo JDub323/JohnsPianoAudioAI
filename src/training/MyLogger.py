@@ -50,7 +50,7 @@ class TrainingLogger:
     def log_epoch_metrics(self, val_loss, y_true, y_pred, tolerance, fs):
         """Log per epoch metrics (validation, accuracy, F1, etc.)."""
         self.epoch += 1
-        self.writer.add_scalar("Val/Loss", val_loss.item(), self.epoch)
+        self.writer.add_scalar("Val/Loss", val_loss, self.epoch)
 
         # Compute note-wise/multilabel F1
         prec, recall, f1 = calc_metrics.get_prec_recall_f1(y_true, y_pred, tolerance, fs)
