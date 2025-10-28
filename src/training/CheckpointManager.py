@@ -9,10 +9,12 @@ import logging
 import os
 import glob
 import torch
+import os
 
 class CheckpointManager():
     def __init__(self, configs):
         self.checkpoint_dir = configs.training.checkpoint_dir 
+        self.run_name = configs.experiment.name
 
     def load_newest_checkpoint(self):
         # find newest checkpoint. if no checkpoints, throw error
@@ -34,15 +36,34 @@ class CheckpointManager():
         return checkpoint
 
     def save_checkpoint(self, epoch: int, model, optimizer, scheduler, loss, global_step):
+        if scheduler != None:
+            schedule_dict = scheduler.state_dict()
+        else:
+            schedule_dict = None
+
         checkpoint = {
           "epoch": epoch,
           "model_state_dict": model.state_dict(),
           "optimizer_state_dict": optimizer.state_dict(),
-          "scheduler_state_dict": scheduler.state_dict(),  # if you use one
+          "scheduler_state_dict": schedule_dict,
           "loss": loss,
-          # TODO: fix below
           "global_step": global_step,
         }
-        torch.save(checkpoint, self.checkpoint_dir)
+
+        chkpt = os.path.join(self.checkpoint_dir, self.run_name + f"_E{epoch:03d}")
+
+        # handle repeated checkpoint names
+        if os.path.exists(chkpt):
+            i = 0
+            while True:
+                chkpt_new = chkpt + f"_({i})"
+                if not os.path.exists(chkpt_new): break
+                i += 1
+
+            chkpt = chkpt_new
+
+        # add file extension
+        chkpt += ".pt"
+        torch.save(checkpoint, chkpt)
 
 

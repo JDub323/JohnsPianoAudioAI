@@ -71,9 +71,32 @@ def tuple_pianoroll_to_notes(pianoroll: torch.Tensor, fs):
 
         # finally, I need to pair note onset indices with the corresponding next note offset index
         # for my purposes, I will disallow the capacity for a note to have an onset and offset on the same frame.
-        breakpoint()
+        onset_idx = 0
+        offset_idx = 0
+        
+        while onset_idx < len(onsets):
+            current_onset = onsets[onset_idx]
+            
+            # Find the next offset that occurs after this onset
+            while offset_idx < len(offsets) and offsets[offset_idx] <= current_onset:
+                offset_idx += 1
+            
+            # If we found a valid offset, create the note
+            if offset_idx < len(offsets):
+                current_offset = offsets[offset_idx]
+                
+                # Convert frames to seconds
+                onset_time = current_onset.item() / fs
+                offset_time = current_offset.item() / fs
+                
+                intervals.append([onset_time, offset_time])
+                pitches.append(key + 21)  # MIDI pitch (key 0 = A0 = MIDI 21)
+                
+                onset_idx += 1
+            else:
+                # No more offsets available, break
+                break
 
-    # convert the metrics to seconds, rather than frames
     return np.array(intervals), np.array(pitches)
 
 # TODO
@@ -99,6 +122,17 @@ def get_prec_recall_f1(label_pianoroll: torch.Tensor, pred_pianoroll: torch.Tens
         # Convert ground truth and predictions to events
         ref_intervals, ref_pitches = tuple_pianoroll_to_notes(label_pianoroll[i], fs)
         est_intervals, est_pitches = tuple_pianoroll_to_notes(pred_pianoroll[i], fs)
+
+        # cannot pass intervals of size 0 to mir_eval. If either of these are 0, add 0 for all metrics, 
+        # unless both are 0, when you add 1 since it is a perfect job guessing no notes
+        if ref_pitches.size == 0 and est_pitches.size == 0:
+            sum_metrics[0] += 1 
+            sum_metrics[1] += 1 
+            sum_metrics[2] += 1 
+            continue
+        if ref_pitches.size == 0 or est_pitches.size == 0:
+            continue
+
 
         # Compute note-level scores with 50ms onset tolerance and offset matching
         precision, recall, f1, _ = mir_eval.transcription.precision_recall_f1_overlap(

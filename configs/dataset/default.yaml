@@ -21,7 +21,7 @@ transform:
 
 normalize_audio: false # experamental function to make all piano audios roughly the same loudness
 augment_audio_data: true
-samples_silence: 200000 # Audiomentations are still present, so not "silent". APX. 5 seconds
+samples_silence: 200000 # Audiomentations are still present, so not "silent". APX. 5 seconds (AFAIK... TODO: CHECK THIS)
 noise_root: /mnt/c/Users/jwhal/Projects/PythonProjects/JohnsPianoAudioAI/data/augmentations # use of abs path only for debugging
 noise_paths:
   environmental: ./data/augmentations/environment_resampled/

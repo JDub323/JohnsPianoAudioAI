@@ -11,7 +11,7 @@ import os
 class TrainingLogger:
     # need all of these vars on init because I need to be able to run the logger from any checkpoint
     # TODO: make sure checkpoints save all this data. Consider making a struct
-    def __init__(self, configs, epoch, global_step, best_val_loss):
+    def __init__(self, configs, epoch, global_step, best_val_loss, best_val_f1):
         # init the var "self.base_dir" and make directories for the logs, plots, and predicitons for the base dir
         self.set_tensorboard_base_dir(configs)
 
@@ -19,6 +19,7 @@ class TrainingLogger:
         self.global_step = global_step # total number of optimizer steps since the start of training
         self.epoch = epoch
         self.best_val_loss = best_val_loss
+        self.best_val_f1 = best_val_f1
         self.num_labels = 88 # there are 88 piano keys. This will never change in the project
 
         self.start_time = time.time()

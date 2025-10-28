@@ -93,7 +93,7 @@ def train(configs: DictConfig) -> None:
     csv_name = configs.dataset.processed_csv_name
     training_dataset = MyDataset(join(data_root, "train"), csv_name)
     validation_dataset = MyDataset(join(data_root, "validation"), csv_name)
-    train_dl = DataLoader(training_dataset, batch_size=configs.training.batch_size, shuffle=True)
+    train_dl = DataLoader(training_dataset, batch_size=configs.training.batch_size, shuffle=False) # IMPORTANT: THIS DOESN"T SHUFFLE !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!! FIX FIX FIX LATER TODO
     validation_dl = DataLoader(validation_dataset, batch_size=configs.training.batch_size, shuffle=False)
 
     # load model from checkpoint if possible/necessary
@@ -132,6 +132,7 @@ def train(configs: DictConfig) -> None:
         start_epoch = 0
         
         best_loss = float('inf')
+        best_f1 = 0
         global_step = 0
 
     # get loss function
@@ -143,7 +144,7 @@ def train(configs: DictConfig) -> None:
     print("made early stopper")
 
     # make a logging object
-    logger = TrainingLogger(configs, start_epoch, global_step, best_loss)
+    logger = TrainingLogger(configs, start_epoch, global_step, best_loss, best_f1)
     print("made a logger")
 
     # add model to device
@@ -182,15 +183,18 @@ def train(configs: DictConfig) -> None:
             lr = scheduler.get_last_lr()[0]
             logger.step(loss, lr, grad_norm)
             logger.log_time()
-            if global_step >= 5:
-                break
+            # if global_step >= 5: # for debugging
+            #     break
 
+        print("evaluating model")
         model.eval() # disable "learning" (this is also done within the function)
         # get the validation loss, y_pred, and y_true
         val_loss, y_true, y_pred = eval_model.dynamic_eval(model, validation_dl, criterion, device) 
 
+        print("logging epoch metrics")
         logger.log_epoch_metrics(val_loss, y_true, y_pred, tolerance, fs)
 
+        print("saving checkpoint")
         # save a new checkpoint if improved
         # TODO: update loss to make it average, innstead of the most recent 
         checkpointer.save_checkpoint(epoch, model, optimizer, None, loss, global_step)
@@ -201,10 +205,9 @@ def train(configs: DictConfig) -> None:
             break
 
         # step scheduler here if epoch-based
+        print("stepping scheduler")
         if epoch_based:
             scheduler.step()
-
-    return 
 
     # test the model on test dataset
     test_dataset = MyDataset(join(data_root, "test"), csv_name)
