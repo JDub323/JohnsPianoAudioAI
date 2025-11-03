@@ -16,7 +16,7 @@ class APT(nn.Module):
         self.onset = model0()
         self.activation = model0()
         
-        self.fc_onset = nn.Linear(88*2, 88) 
+        self.fc_onset = nn.Linear(88*2, 88)
         self.fc_activation = nn.Linear(88*2, 88)
 
     # returns a torch tensor whose first channel is velocity predictions, second channel is 

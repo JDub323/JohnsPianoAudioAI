@@ -48,18 +48,18 @@ class TrainingLogger:
         if gpus:
             self.writer.add_scalar("Resources/GPU_Mem_MB", gpus[0].memoryUsed, self.global_step)
 
-    def log_epoch_metrics(self, val_loss, y_true, y_pred, tolerance, fs):
+    def log_epoch_metrics(self, val_loss, prec, recall, f1):
         """Log per epoch metrics (validation, accuracy, F1, etc.)."""
         self.epoch += 1
         self.writer.add_scalar("Val/Loss", val_loss, self.epoch)
 
         # Compute note-wise/multilabel F1
-        prec, recall, f1 = calc_metrics.get_prec_recall_f1(y_true, y_pred, tolerance, fs)
         self.writer.add_scalar("Val/F1", f1, self.epoch)
         self.writer.add_scalar("Val/recall", recall, self.epoch)
         self.writer.add_scalar("Val/precision", prec, self.epoch)
 
         # Track best model
+        # TODO: check this out, what is this code supposed to do??
         improved = False
         if val_loss < self.best_val_loss:
             self.best_val_loss = val_loss
@@ -68,6 +68,7 @@ class TrainingLogger:
             self.best_val_f1 = f1
             improved = True
 
+    # not used currently
     def log_time(self):
         elapsed = time.time() - self.start_time
         self.writer.add_scalar("Time/TotalSeconds", elapsed, self.global_step)

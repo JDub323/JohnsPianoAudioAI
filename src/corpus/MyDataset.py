@@ -48,5 +48,6 @@ class MyDataset(Dataset):
 
     def _load_shard(self, shard_idx) -> None:
         self._cached_shard = torch.load(self.files[shard_idx])
+        # TODO: move entire shard onto GPU, would need to save shards as torch tensors, and then resize shards
         self._cached_shard_idx = shard_idx
 

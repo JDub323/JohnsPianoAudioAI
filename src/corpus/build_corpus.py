@@ -1,4 +1,6 @@
 from omegaconf import DictConfig
+import torch
+from pathlib import Path
 from typing import Any
 from pretty_midi import PrettyMIDI
 from torch import norm_except_dim
@@ -16,6 +18,17 @@ import pdb
 # TEST: make 100 rows, started the code at 2:25pm, started processing at 2:29pm
 # looking like around 27 seconds per row on average. Done around 3:15pm or a bit before, so around 27 seconds to 
 # process each row. With this speed, it will take approximately 9 HOURS. Consider multithreading. 
+
+# NEW TEST: NOW ON THE WSL FILE SYSTEM, I will try to make 200 rows. started at 11:37am, with other tabs open,
+# but my computer sounded like it was going to explode so I closed them (around 30 tabs of google, including one playing music) 
+# on row 40 at 11:41 after 4 minutes. on WSL, looks like 10 rows per minute, or about 6 seconds per row on average. However, 
+# things seem to be slowing down. It could have been that tensors were finally being uploaded, which takes a bit.
+# done with row 100 at 11:48am, which is still roughly 10 rows per minute. just going on WSL lowers the time to process to 
+# about 2 hours 20 minutes, which is about a 4x speedup for FREE :). 2 hours is managable, takes up ~17GB if entire dataset
+# done with row 200 before 11:59am. 2.7GB data for 200 rows
+# this is apx. 15.8% of the total corpus in around 20 minutes, which is quite nice. 
+# command: python3 -m src.scripts.build_corpus dataset.row_limit=200
+# other command: tensorboard --logdir=./outputs/run_2025-10-31_11-31-37/logs
 
 # low-priority TODO: send audiomentations and fft calculations to gpu, parallelize to increase speed (it is hard)
 def build_corpus(configs: DictConfig):
@@ -36,9 +49,6 @@ def build_corpus(configs: DictConfig):
     """
     # get the dataframe with all the files
     df_unproc = utils.get_raw_data_df(configs)
-
-    # start debugging
-    # pdb.set_trace()
 
     # clean up the dataframe (get rid of any null rows, unneeded cols, etc.)
     # pneumonic: dataframe, unprocessed
@@ -83,7 +93,7 @@ def build_corpus(configs: DictConfig):
 
         # find the number of frames per tensor
         frames_per_segment = utils.calc_midi_frame_count(configs)
-        
+
         # convert the midi to a NoteLabels object happens in the following function
         # call a split function to return a list of tuples, each with an input tensor and 
         # the corresponding labels object
@@ -116,6 +126,10 @@ def build_corpus(configs: DictConfig):
     # tell the sharder that we are done giving it data, and it will upload the df and the rest of the 
     # unfilled shards
     sharder.done_adding_data()
+
+    # shuffle shards 
+    logging.info('Cleaning Corpus')
+    clean_corpus(configs)
 
     # save the configs used to generate the data
     logging.info('Saving configs') # log
@@ -165,3 +179,45 @@ def calc_split(configs, row: pd.Series) -> str:
     else:
         raise ValueError('Random split functionality not programmed yet')
 
+# function to shuffle the corpus after it was built so dataloader can used cached shards
+# "clean corpus" in case I would like to do other post-processing, like removing outliers
+def clean_corpus(configs):
+    # allow the loading of my shards
+    torch.serialization.add_safe_globals([ProcessedAudioSegment, NoteLabels])
+
+    shuffle_shards(os.path.join(configs.dataset.export_root, "train"), configs.dataset.processed_csv_name) # only need to shuffle the training dataset
+
+# path is a directory which houses a dataframe which points to all the shards, and all the shards
+def shuffle_shards(path_to_data, df_name):
+    # download the dataframe 
+    dataframe_abs_name = os.path.join(path_to_data, df_name)
+    df = pd.read_csv(dataframe_abs_name)
+
+    # get a list of shard filenames 
+    shards = sorted(Path.glob(Path(path_to_data), "*_shard*.pt")) # the star in beginning lets me shuffle anything, not just train data
+
+    # for each shard 
+    for shard_filename in shards:
+        # get the id 
+        shard_id = int(shard_filename.stem.split("_shard")[1])
+
+        # load the shard 
+        shard = torch.load(shard_filename)
+        n = len(shard)
+
+        # shuffle the shard 
+        perm = np.random.permutation(n)
+        shard_shuffled = [shard[i] for i in perm]
+        torch.save(shard_shuffled, shard_filename)
+        
+        # apply the same shuffle to the rows of the dataframe
+        mask = df["shard_number"] == shard_id
+        shard_rows = df.loc[mask].copy().reset_index(drop=True)
+        shard_rows = shard_rows.iloc[perm].reset_index(drop=True)
+        
+        # put the shuffled rows back into the dataframe
+        df.loc[mask] = shard_rows.values
+
+    # save the dataframe with the same filename (overwrite it)
+    df.to_csv(dataframe_abs_name, index=False)
+    logging.info(f"Shuffling complete. Updated dataframe saved to {dataframe_abs_name}")

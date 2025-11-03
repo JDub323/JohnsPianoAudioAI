@@ -22,6 +22,7 @@ class EarlyStopper:
         else:
             self.counter += 1
             if self.counter >= self.patience:
+                print("EARLY STOPPING")
                 return True
             # otherwise, if patience has not run out, return false (don't stop training)
             else: return False

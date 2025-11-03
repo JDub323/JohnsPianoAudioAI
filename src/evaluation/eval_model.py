@@ -7,6 +7,8 @@ from torch.utils.data import DataLoader
 from os.path import join
 import torch
 from ..training.train_utils import get_basic_loss_fxn, get_device 
+from .calc_metrics import tuple_pianoroll_to_notes
+import mir_eval
 
 def evaluate(configs, data_split:str) -> None:
     # import the checkpoint 
@@ -39,19 +41,21 @@ def evaluate(configs, data_split:str) -> None:
 # dynamic since it uses model, dataloader, criterion, and device which already exist as variables
 # RETURN TYPE: tuple of a float which is the average loss output by the eval, and two lists of torch tensors,
 # which have their tensors concatenated through the channel dimension in alphabetical order
-def dynamic_eval(model, eval_loader, criterion, device) -> tuple[float, torch.Tensor, torch.Tensor]:
+# NEW RETURN TYPE: tuple of loss, avg_prec, avg_recall, avg_f1
+def dynamic_eval(model, eval_loader, criterion, device, fs, tolerance):
     model.eval() 
-    running_loss = 0.0
-    all_preds = []
-    all_labels = []
+    sum_loss = 0.0
+    sum_prec =  0.0
+    sum_recall = 0.0
+    sum_f1 = 0.0
 
     # add model to device if it is not on the right device
-    model = model.to(device)
+    model = model.to(device, non_blocking=True)
     
     with torch.no_grad():
          for inputs, labels in eval_loader:
              # send the inputs and labels to the gpu 
-             inputs, labels = inputs.to(device), labels.to(device)
+             inputs, labels = inputs.to(device, non_blocking=True), labels.to(device, non_blocking=True)
 
              # have the model make predictions
              outputs = model(inputs)
@@ -59,14 +63,50 @@ def dynamic_eval(model, eval_loader, criterion, device) -> tuple[float, torch.Te
              # calculate the loss function: outputs vs labels
              loss = criterion(outputs, labels)
             
-             running_loss += loss.item()
-             all_preds.append(outputs)
-             all_labels.append(labels)
+             sum_loss += loss.item()
+             prec, recall, f1 = eval_single_batch(outputs, labels, fs, tolerance)
+             sum_prec += prec
+             sum_recall += recall
+             sum_f1 += f1
 
+             del inputs, labels, outputs, loss
 
-    all_preds = torch.cat(all_preds)
-    all_labels = torch.cat(all_labels)
+    avg_loss = sum_loss / len(eval_loader)
 
-    avg_loss = running_loss / len(eval_loader)
+    return avg_loss, sum_prec, sum_recall, sum_f1
 
-    return avg_loss, all_labels, all_preds
+def eval_single_batch(outputs, labels, fs, tolerance):
+    sum_prec = 0.0
+    sum_recall = 0.0
+    sum_f1 = 0.0
+    batch_size = outputs.size()[0]
+
+    for i in range(batch_size):
+        # Convert ground truth and predictions to events
+        ref_intervals, ref_pitches = tuple_pianoroll_to_notes(labels[i], fs)
+        est_intervals, est_pitches = tuple_pianoroll_to_notes(outputs[i], fs)
+
+        # cannot pass intervals of size 0 to mir_eval. If either of these are 0, add 0 for all metrics, 
+        # unless both are 0, when you add 1 since it is a perfect job guessing no notes
+        if ref_pitches.size == 0 and est_pitches.size == 0:
+            sum_prec += 1 
+            sum_recall += 1 
+            sum_f1 += 1 
+            continue
+
+        if ref_pitches.size == 0 or est_pitches.size == 0:
+            continue
+
+    # Compute note-level scores with 50ms onset tolerance and offset matching
+        precision, recall, f1, _ = mir_eval.transcription.precision_recall_f1_overlap(
+        ref_intervals, ref_pitches,
+        est_intervals, est_pitches,
+        onset_tolerance=tolerance,
+        offset_ratio=None       # None = don’t require offset matching (ignore linter complaints)
+        )
+
+        sum_prec += precision
+        sum_recall += recall
+        sum_f1 += f1
+
+    return sum_prec / batch_size, sum_recall / batch_size, sum_f1 / batch_size
