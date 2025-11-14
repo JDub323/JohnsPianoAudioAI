@@ -53,20 +53,18 @@ class TrainingLogger:
         self.epoch += 1
         self.writer.add_scalar("Val/Loss", val_loss, self.epoch)
 
-        # Compute note-wise/multilabel F1
+        # add multilabel f1, recall, precision
         self.writer.add_scalar("Val/F1", f1, self.epoch)
         self.writer.add_scalar("Val/recall", recall, self.epoch)
         self.writer.add_scalar("Val/precision", prec, self.epoch)
 
-        # Track best model
-        # TODO: check this out, what is this code supposed to do??
-        improved = False
-        if val_loss < self.best_val_loss:
-            self.best_val_loss = val_loss
-            improved = True
-        if f1 > self.best_val_f1:
-            self.best_val_f1 = f1
-            improved = True
+    def log_test_metrics(self, val_loss, prec, recall, f1):
+        self.writer.add_scalar("Test/Loss", val_loss, self.epoch)
+
+        # add multilabel f1, recall, precision
+        self.writer.add_scalar("Test/F1", f1, self.epoch)
+        self.writer.add_scalar("Test/recall", recall, self.epoch)
+        self.writer.add_scalar("Test/precision", prec, self.epoch)
 
     # not used currently
     def log_time(self):
@@ -79,6 +77,9 @@ class TrainingLogger:
             self.writer.add_histogram(f"Weights/{name}", param.data.cpu().numpy(), self.global_step)
             if param.grad is not None:
                 self.writer.add_histogram(f"Grads/{name}", param.grad.cpu().numpy(), self.global_step)
+
+    def log_model(self, model: torch.nn.Module):
+        self.writer.add_graph(model)
 
     def close(self):
         self.writer.close()

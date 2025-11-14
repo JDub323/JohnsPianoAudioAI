@@ -26,8 +26,8 @@ def evaluate(configs, data_split:str) -> None:
     eval_dataset = MyDataset(join(data_root, data_split), csv_name)
     eval_loader = DataLoader(eval_dataset, batch_size=configs.training.batch_size, shuffle=False) # can validation be put in order?
 
-    # get loss function
-    criterion = get_basic_loss_fxn(configs.training.loss_function)
+    # get loss function (not the right function rn)
+    criterion = (configs.training.loss_function) # TODO: replace with the right function
 
     # get device 
     device = get_device(configs)
@@ -75,13 +75,16 @@ def dynamic_eval(model, eval_loader, criterion, device, fs, tolerance):
 
     return avg_loss, sum_prec, sum_recall, sum_f1
 
-def eval_single_batch(outputs, labels, fs, tolerance):
+def eval_single_batch(outputs: torch.Tensor, labels, fs, tolerance):
     sum_prec = 0.0
     sum_recall = 0.0
     sum_f1 = 0.0
     batch_size = outputs.size()[0]
 
     for i in range(batch_size):
+        # convert outputs to binary matrices which "tuple_pianoroll_to_notes" can handle, or sigmoided for velocity
+        outputs = clean_pianoroll(outputs)
+
         # Convert ground truth and predictions to events
         ref_intervals, ref_pitches = tuple_pianoroll_to_notes(labels[i], fs)
         est_intervals, est_pitches = tuple_pianoroll_to_notes(outputs[i], fs)
@@ -110,3 +113,13 @@ def eval_single_batch(outputs, labels, fs, tolerance):
         sum_f1 += f1
 
     return sum_prec / batch_size, sum_recall / batch_size, sum_f1 / batch_size
+
+def clean_pianoroll(outputs: torch.Tensor, clean_velo: bool=False):
+    outputs = outputs.detach().cpu()
+
+    activations = (outputs[0] >= 0).to(torch.uint8)
+    onsets = (outputs[1] >= 0).to(torch.uint8)
+    velocities  = torch.sigmoid(outputs[2])
+
+    return torch.stack([activations, onsets, velocities])
+

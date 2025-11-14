@@ -184,3 +184,29 @@ def plot_spec_and_notes(spec, onset_mat, down_mat, vel_mat, sr: int, hop_length=
     # Align everything
     plt.tight_layout()
     plt.show() # plot
+
+# can also be used to plot model labels in piano roll representation. copied code from AI generated function above
+def plot_outputs(outputs, name: str=""):
+    if isinstance(outputs, torch.Tensor):
+        outputs = outputs.cpu().numpy()
+
+    activations, onsets, velocities = outputs
+
+    fig, axes = plt.subplots(3, 1, figsize=(12, 10))
+
+    img3 = axes[0].imshow(activations, aspect='auto', origin='lower', interpolation='nearest')
+    axes[0].set_title(f"Note Activation Matrix. Size: {activations.shape}")
+    fig.colorbar(img3, ax=axes[0])
+
+    img2 = axes[1].imshow(onsets, aspect='auto', origin='lower', interpolation='nearest')
+    axes[1].set_title(f"Note Onset Matrix. Size: {onsets.shape}")
+    fig.colorbar(img2, ax=axes[1])
+
+    # --- 4. Velocity matrix ---
+    img4 = axes[2].imshow(velocities, aspect='auto', origin='lower', interpolation='nearest')
+    axes[2].set_title(f"Note Velocity Matrix. Size: {velocities.shape}")
+    fig.colorbar(img4, ax=axes[2])
+
+    # Align everything
+    plt.tight_layout()
+    plt.show() # plot

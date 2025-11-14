@@ -1,16 +1,23 @@
 This is a list of bugs which I need to fix or features I need to add. Things are roughly written in order of priority. 
 
-refactor evaluation: do not save references to model outputs, but instead just calculate them right away. This should prevent a memory leak
-figure out why my metrics are constant
+make sure the dataloader uses the correct dataframe indices so things are actually shuffled
+
+fix many many issues with my model
+write more unittests for buggy outputs
+make a cli which can iterate over instances of data, their outputs, pre-processed, etc.
+shuffle among shards as well as within shards
+shuffle order of shards when training, shuffle training shard in between epochs
+figure out how to analyze data from tensorboard
+figure out why my metrics are constant and above 1
 fix bug: when loading a checkpoint, not all tensors are put onto cuda
 fix all memory leaks related to evaluation: RAM memory usage spikes after evaluation
 fix checkpoint loading (best f1 not existing)
-shuffle dataset within shards, while updating the dataframe accordingly, so I can train on data in order, taking advantage of cached shards
 save data as torch.tensors rather than nested dictionaries
 update model to be more effective
 change how models are saved, put all instances from one run into its own folder
 fix augmentation pipeline: sometimes too many augmentations drowning out piano
 double shard size (they are a little bit small rn)
+log spectrogram images and the corresponding predictions
+add more logging
 
-make sure the dataloader uses the correct dataframe indices so things are actually shuffled
 

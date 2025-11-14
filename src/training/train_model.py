@@ -1,48 +1,3 @@
-# objects which need to be made/will be used:
-# CheckpointManager: used to log checkpoints. Saves model and metrics related to it in the models dir, 
-    # saved as ckpt_00X.pt 
-# Optimizer: applies gradients to weights and biases of model
-# Scheduler: decides what the "learning rate" of the optimizer should be 
-# Scaler: scales up gradients to avoid floating point rounding to 0 for small numbers, scaled back down before 
-    # being applied. This is mostly useful if gradients are saved as float16 while w/b are float32, so I might not need this.
-# ProgressBar: just used to show progress of training in terminal. Optional but nutty, can have chat make one
-    # can use the TQDM python library for this 
-# criterion: torch's nn loss function. used in a line like this: loss = criterion(logits, targets)
-    # 'logits' are raw outputs from the model, before softmax/sigmoid. targets are the labels. 
-    # loss is a scalar (dtype: torch.Tensor) which represents how bad my model did
-# EMA: an "exponential moving average" of the model's weights. This means this thing makes another model, which lags 
-    # behind the actual model, but in return is more stable and trains better. Not a priority, but should add eventually
-# csv_logging object: a dataframe, but if the program crashes for whatever reason, not all is lost..? idk. It writes logs 
-    # to a csv instead of normal logs. Probably more digestible in code to do this way, but not a priority addition
-# logger object: THE MOST COMPLEX OF THESE, I have to keep track of: epoch, running loss, global step, and so much more.
-# here is what chatGPT said about it:
-# Training stats (per step or batch), 
-# Loss
-# Accuracy (or other task-specific metrics: F1, IoU, CER/WER for speech, etc.)
-# Gradient norm (helps debug exploding gradients)
-# Learning rate (from the scheduler)
-# GPU memory usage (sometimes)
-# Validation stats (per epoch or validation interval)
-# Validation loss
-# Validation accuracy/other metrics
-# Best-so-far checkpoint metrics
-# Training metadata
-# Epoch number, global step
-# Time per step/epoch (speed)
-# Total training time so far
-# Artifacts
-# Model checkpoints (weights, optimizer state, scheduler state)
-# Samples (e.g., spectrograms, predictions vs. targets, generated audio/images)
-# Configuration used (hyperparameters, model definition, dataset info)
-# Debug info (optional but helpful)
-# Gradient histograms
-# Weight histograms
-# Learning curves
-# Random seed, environment info (GPU type, library versions)
-# chat also mentioned that there are some libraries which do a lot of this automatically, such as TensorBoard, 
-# but I think I want a wrapper for that just so I don't have to worry about details on how to use the object within 
-# this function, so it will still be a lot to do for a logger object
-
 # TESTING: I started the training program at 11:00, and fixed all bugs before then. takes about 6-7 minutes to start training.
 # the longest portion of the startup is the imports, but making the optimizer takes a second. Obviously, training takes much
 # longer than everything else. I think that my biggest bottleneck is actually disc I/O, since on task manager, it says I am using
@@ -75,8 +30,10 @@
 # both these tests include commented-out batch-level logging
 
 # long test: start epoch 3 at 2:21. Fixed memory leak issues, so I am going to let my model run for a while.
-# Going to go work out then come back. By 3:07, I FINISHED???. I only got 34 epochs in, it seems like something
-# broke while running, and I don't know what since I wasn't here to see it.
+# Going to go work out then come back. By 3:07, I FINISHED???. I only got 34 epochs in, since early stopping caused
+# me to stop training, since I wasn't getting any better, which is embarrasing, since I think I am nowhere near being 
+# accurate from what I can tell.
+
 
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -98,7 +55,6 @@ from src.corpus.datatypes import ProcessedAudioSegment, NoteLabels
 from .loss_wrapper import LossWrapper
 
 def train(configs: DictConfig) -> None:
-
     # get device
     print("getting device")
     device = get_device(configs)
@@ -112,7 +68,7 @@ def train(configs: DictConfig) -> None:
     torch.serialization.add_safe_globals([ProcessedAudioSegment, NoteLabels])
 
     # make data loaders for training and validation
-    print("Dataloaders made")
+    print("making dataloaders")
     data_root = configs.dataset.export_root
     csv_name = configs.dataset.processed_csv_name
     training_dataset = MyDataset(join(data_root, "train"), csv_name)
@@ -162,7 +118,6 @@ def train(configs: DictConfig) -> None:
     # set defaults if there was no checkpoint
     else:
         start_epoch = 0
-        
         best_loss = float('inf')
         best_f1 = 0
         global_step = 0
@@ -229,11 +184,11 @@ def train(configs: DictConfig) -> None:
         print("saving checkpoint")
         # save a new checkpoint if improved
         # TODO: update loss to make it average, innstead of the most recent 
-        checkpointer.save_checkpoint(epoch, model, optimizer, None, loss, best_f1, global_step)
+        checkpointer.save_checkpoint(epoch, model, optimizer, None, val_loss, best_f1, global_step)
 
         # do early stopping
         if early_stopper(val_loss):
-            logging.info(f"Early stopping at epoch {epoch}.")
+            print(f"Early stopping at epoch {epoch}.")
             break
 
         # step scheduler here if epoch-based
@@ -255,8 +210,9 @@ def train(configs: DictConfig) -> None:
     # compute and log test metrics and sample predictions
     # Final model can now be used to make predictions in real time. you can get it from the checkpoint probably
     print("doing final logging")
-    logger.log_epoch_metrics(test_loss, test_prec, test_rec, test_f1)
+    logger.log_test_metrics(test_loss, test_prec, test_rec, test_f1)
     logger.log_histograms(model)
+    logger.log_model(model)
     logger.close()
 
     return
