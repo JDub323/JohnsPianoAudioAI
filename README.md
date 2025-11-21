@@ -1,51 +1,45 @@
-# 🎹 Automatic Piano Music Transcription (Work in Progress)
+# Automatic Piano Music Transcription (Work in Progress)
 
-This repository contains an **in-progress deep learning project** for **Automatic Music Transcription (AMT)**, with a focus on piano recordings. The goal is to build a model that converts raw audio into symbolic musical notation (e.g., MIDI).  
+This repository contains an **in-progress deep learning project** for **Automatic Music Transcription (AMT)**, focused on piano audio. The long-term goal is to build a system that converts raw audio into symbolic musical notation (e.g., MIDI) and eventually supports real-time transcription.
 
 ## Project Status
-🚧 **Currently in development**  
-- ✅ Corpus generation implemented  
-- ✅ High-level pseudocode for training and inference  
-- 🔄 Model architecture (deep dive in progress)  
-- 🔄 Logging, experiment tracking, and training pipeline  
+**Currently working on improving my model**, taking architectural inspiration from the *Mobile-AMT* paper.  
+All previously “in-progress” steps (corpus generation, pseudocode, architecture exploration, training pipeline design) have now been completed at a preliminary level.
 
----
+- The model currently uses a **stack of CNN layers followed by GRU layers**, loosely modeled after the Mobile-AMT design.  
+- Training is performed on a personal laptop, where one full pass through the dataset takes roughly 12 hours.  
+- I’m actively addressing **memory leaks**, long training times, and stability issues during development.
 
-## 📀 Corpus Generation
-The corpus is built from the [**MAESTRO dataset**](https://magenta.tensorflow.org/datasets/maestro), which contains paired piano audio and MIDI files.  
+## Corpus Generation
+The corpus is built from the **MAESTRO dataset**, which provides paired piano audio and MIDI data.
 
-- **Data Augmentation**: Applied audio transformations inspired by the augmentation pipeline in [Audio-AMT](https://ieeexplore.ieee.org/document/10715008).  
+- **Data Augmentation**: Includes several audio-domain transformations inspired by the augmentation strategies described in *Mobile-AMT*.
 
----
+## Planned Work
+- **Model Improvements**
+  - Continue refining CNN/GRU architecture
+  - Improve frame-level and onset prediction accuracy
+  - Move toward real-time inference stability
 
-## 🧩 Planned Work
-- **Model Architecture**:  
-  - Exploring U-Net style encoders combined with sequence models (e.g., Transformers)  
-  - Investigating recent AMT model designs for piano transcription  
+- **Training Infrastructure**
+  - Strengthen logging and experiment tracking
+  - Integrate TensorBoard or Weights & Biases
+  - Consider cloud-based training once local limits are reached
 
-- **Training & Logging**:  
-  - Implement robust logging for losses, metrics, and visualizations  
-  - Integrate with tools like TensorBoard or Weights & Biases  
+- **Evaluation**
+  - Frame-level, onset-level, and note-level metrics
+  - Compare performance against published AMT baselines
 
-- **Evaluation**:  
-  - Frame-level, note-level, and onset-offset metrics  
-  - Comparisons against baseline AMT models  
+## Roadmap
+1. Improve training stability and reduce memory-related issues  
+2. Achieve reliable real-time prediction by end of the month (aspirational)  
+3. Achieve *consistent* real-time prediction by end of the year (also aspirational)  
+4. Expand team collaboration next semester to accelerate development  
+5. Build a mobile app capable of displaying **Synthesia-style block note visualizations** as a semester-end goal
 
----
+## Contributing
+This project is still early-stage, but suggestions, insights, and collaboration are welcome.
 
-## 📌 Roadmap
-1. Finalize model design  
-2. Implement training & evaluation loops  
-3. Add experiment tracking & logging  
-4. Release pretrained checkpoints and demo notebooks  
-
----
-
-## 🤝 Contributing
-This project is still in an early phase, but feedback and suggestions are welcome!  
-
----
-
-## 📜 License
-TBD (to be added once the project stabilizes).
+## License
+TBD (to be added once the project stabilizes)
 
