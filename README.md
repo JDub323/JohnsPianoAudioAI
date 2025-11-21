@@ -4,10 +4,9 @@ This repository contains an **in-progress deep learning project** for **Automati
 
 ## Project Status
 **Currently working on improving my model**, taking architectural inspiration from the *Mobile-AMT* paper.  
-All previously “in-progress” steps (corpus generation, pseudocode, architecture exploration, training pipeline design) have now been completed at a preliminary level.
 
 - The model currently uses a **stack of CNN layers followed by GRU layers**, loosely modeled after the Mobile-AMT design.  
-- Training is performed on a personal laptop, where one full pass through the dataset takes roughly 12 hours.  
+- Training is performed on a personal laptop, where 100 epochs would take roughly 12 hours.  
 - I’m actively addressing **memory leaks**, long training times, and stability issues during development.
 
 ## Corpus Generation
@@ -42,4 +41,5 @@ This project is still early-stage, but suggestions, insights, and collaboration 
 
 ## License
 TBD (to be added once the project stabilizes)
+
 
