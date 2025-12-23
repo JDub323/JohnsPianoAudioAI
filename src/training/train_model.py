@@ -34,6 +34,8 @@
 # me to stop training, since I wasn't getting any better, which is embarrasing, since I think I am nowhere near being 
 # accurate from what I can tell.
 
+# new test in prob incoming: only got 22 cycles in before early stopping. Doesn't that mean it was better?
+
 
 from omegaconf import DictConfig
 from torch.utils.data import DataLoader
@@ -42,9 +44,9 @@ from .MyLogger import TrainingLogger
 
 from .EarlyStopper import EarlyStopper
 from . import train_utils
-
+from .ModelDebugger import ModelDebugger
 from .CheckpointManager import CheckpointManager
-from ..model.AutomaticPianoTranscriptor import APT
+from ..model.APT1 import APT1
 import logging
 from ..corpus.MyDataset import MyDataset
 from os.path import join
@@ -52,7 +54,7 @@ from ..evaluation import eval_model
 from .train_utils import get_device, get_grad_norm
 import torch 
 from src.corpus.datatypes import ProcessedAudioSegment, NoteLabels
-from .loss_wrapper import LossWrapper
+from .loss_wrapper import CorrectedLossWrapper, LossWrapper, get_loss_wrapper
 
 def train(configs: DictConfig) -> None:
     # get device
@@ -75,9 +77,10 @@ def train(configs: DictConfig) -> None:
     validation_dataset = MyDataset(join(data_root, "validation"), csv_name)
     train_dl = DataLoader(training_dataset, batch_size=configs.training.batch_size, 
                           shuffle=False, # I will shuffle when I create the corpus, so I can use caches and not shuffle here
-                          num_workers=4,
+                          num_workers=1, # TODO: don't hard code this
                           pin_memory=True,
-                          persistent_workers=True) 
+                          # persistent_workers=True,
+                          )
     validation_dl = DataLoader(validation_dataset, batch_size=configs.training.batch_size, 
                                shuffle=False,
                                num_workers=4,
@@ -97,7 +100,10 @@ def train(configs: DictConfig) -> None:
         checkpoint_found = False
         print("No checkpoint to load. Starting from scratch.")
 
-    model = APT() # custom "AutomaticPianoTranscriptor" object
+    # model = APT0(configs) # custom "AutomaticPianoTranscriptor" object
+    # model = CorrectedAPT() # AI generated version
+    model = APT1()
+
     print("made model")
     optimizer = train_utils.get_optimizer(configs.training.optimizer, model) # This order of things might cause bugs
     print("made optmizer")
@@ -123,8 +129,12 @@ def train(configs: DictConfig) -> None:
         global_step = 0
 
     # get loss function
-    criterion = LossWrapper(configs)
+    criterion = get_loss_wrapper(configs)
     print("got loss function")
+
+    # make debugger which, depending on configs, saves/prints model memory usage, or does nothing
+    mdb = ModelDebugger(configs) # pneumonic: model debugger
+    print("made a model debugger")
 
     # make an early-stopping object 
     early_stopper = EarlyStopper(configs, best_score=best_loss)
@@ -139,18 +149,22 @@ def train(configs: DictConfig) -> None:
     print(f"put model on device: {device}")
     
     # for all epochs, for all iterations on the dataset
+    breakpoint()
     for epoch in range(start_epoch, num_epochs): 
         print(f"starting epoch {epoch} out of {num_epochs}")
 
         # don't forget to put the model back into training mode before training
         model.train()
 
+        # start memory debug here 
+        mdb.start_record_memory_history()
+
         for inputs, labels in train_dl:
             # add inputs and labels to gpu
             inputs = inputs.to(device, non_blocking=True)
             labels = labels.to(device, non_blocking=True)
 
-            optimizer.zero_grad() # set gradient back to 0 (accumulates by default)
+            optimizer.zero_grad(set_to_none=True) # set gradient back to 0 (accumulates by default)
 
             outputs = model(inputs) # forward pass the input through the model
             loss = criterion(outputs, labels) # calculate loss
@@ -169,8 +183,9 @@ def train(configs: DictConfig) -> None:
             # log metrics
             lr = scheduler.get_last_lr()[0]
             logger.step(loss, lr, grad_norm) # not a memory leak, my logger takes the torch tensor and calls loss.item()
-            # if global_step >= 5: # for debugging
-            #     break
+
+            # check to see if I should stop recording memory leaks for the memory debugger
+            mdb.check_cycle_limit()
 
         print("evaluating model")
         model.eval() # disable "learning" (this is also done within the function)
@@ -183,7 +198,6 @@ def train(configs: DictConfig) -> None:
 
         print("saving checkpoint")
         # save a new checkpoint if improved
-        # TODO: update loss to make it average, innstead of the most recent 
         checkpointer.save_checkpoint(epoch, model, optimizer, None, val_loss, best_f1, global_step)
 
         # do early stopping
@@ -195,6 +209,10 @@ def train(configs: DictConfig) -> None:
         print("stepping scheduler")
         if epoch_based:
             scheduler.step()
+
+        if configs.training.shuffle_during_training:
+            print("shuffling training dataset in between epochs")
+            pass
 
     # test the model on test dataset
     print("testing model")
@@ -214,5 +232,8 @@ def train(configs: DictConfig) -> None:
     logger.log_histograms(model)
     logger.log_model(model)
     logger.close()
+
+    mdb.export_memory_snapshot()
+    mdb.stop_record_memory_history()
 
     return

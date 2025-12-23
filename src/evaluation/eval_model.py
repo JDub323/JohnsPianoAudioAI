@@ -1,7 +1,7 @@
 # evaluation function: should be able to use the unseen test data to figure out error, confusion matrix, 
 # and other important metrics, so I know how well my model is actually performing
 from ..training.CheckpointManager import CheckpointManager
-from ..model.AutomaticPianoTranscriptor import APT
+from ..model.AutomaticPianoTranscriptor import APT0
 from ..corpus.MyDataset import MyDataset
 from torch.utils.data import DataLoader 
 from os.path import join
@@ -16,7 +16,7 @@ def evaluate(configs, data_split:str) -> None:
     checkpoint = checkpointer.load_newest_checkpoint() # error will be thrown if no checkpoint exists
 
     # load the model from the checkpoint, making sure to set to eval mode
-    model = APT() # custom "AutomaticPianoTranscriptor" object
+    model = APT0(configs) # custom "AutomaticPianoTranscriptor" object
     model.load_state_dict(checkpoint['model_state_dict'])
     model.eval()
 
@@ -83,7 +83,7 @@ def eval_single_batch(outputs: torch.Tensor, labels, fs, tolerance):
 
     for i in range(batch_size):
         # convert outputs to binary matrices which "tuple_pianoroll_to_notes" can handle, or sigmoided for velocity
-        outputs = clean_pianoroll(outputs)
+        # outputs = clean_pianoroll(outputs) # commented out bc it doesnt work
 
         # Convert ground truth and predictions to events
         ref_intervals, ref_pitches = tuple_pianoroll_to_notes(labels[i], fs)

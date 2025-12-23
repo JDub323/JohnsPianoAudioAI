@@ -1,3 +1,4 @@
+model_name: APT1
 batch_size: 64
 epochs: 100
 learning_rate: .001 
@@ -5,6 +6,8 @@ optimizer: adam # or SGD
 scheduler: cosine
 weight_decay: .0001 
 grad_clip: 1.0 
+debug_model: False
+cycles_before_quit_debug: 5
 
 use_gpu: True
 
@@ -12,14 +15,15 @@ checkpoint_dir: ./models/checkpoints/
 logging_dir: ./outputs/
 
 loss_function: 
-  activations: BCElogits
-  onsets: BCElogits 
+  activations: BCE
+  onsets: BCE
   velocities: MSE # or L1 loss 
 loss_weights:
   activations: 1.0
-  onsets: 2.0 
+  onsets: 1.0 
   velocities: 0.1 # typically even smaller, normalize if needed
 
+shuffle_during_training: True
 early_stopping: True
 early_stop:
   patience: 10

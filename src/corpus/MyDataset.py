@@ -26,7 +26,7 @@ class MyDataset(Dataset):
         try:
             # download ProcessedAudioSegment object with torch
             row = self.df.iloc[idx]
-            # TODO: fix below
+            
             shard_idx, local_idx = int(row['shard_number']), int(row['shard_index'])
 
             shard = self._get_shard(shard_idx) # index of the shard different from index of the item trying to access
@@ -36,7 +36,8 @@ class MyDataset(Dataset):
             # must convert the notelabel to a torch tensor object
             return item.model_input, NoteLabel_to_tensor(item.ground_truth)
         except Exception as e:
-            print(f"[DEBUG] Error at index {idx}")
+            print(f"[DEBUG] Error at shard {shard_idx}, local {local_idx}, global {idx}")
+            print(e)
             raise
 
     def _get_shard(self, shard_idx) -> list[ProcessedAudioSegment]:
@@ -46,8 +47,11 @@ class MyDataset(Dataset):
         self._load_shard(shard_idx)
         return self._cached_shard
 
-    def _load_shard(self, shard_idx) -> None:
-        self._cached_shard = torch.load(self.files[shard_idx])
-        # TODO: move entire shard onto GPU, would need to save shards as torch tensors, and then resize shards
-        self._cached_shard_idx = shard_idx
+    def _load_shard(self, shard) -> None:
+        self._cached_shard = torch.load(
+            self.files[shard],
+            map_location="cpu",
+            mmap=True,
+        )
+        self._cached_shard_idx = shard
 

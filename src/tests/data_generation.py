@@ -6,7 +6,7 @@ import hydra
 from os.path import join
 from torch.utils.data import DataLoader
 from ..training.CheckpointManager import CheckpointManager
-from ..model.AutomaticPianoTranscriptor import APT
+from ..model.AutomaticPianoTranscriptor import APT0
 from ..corpus.MyDataset import MyDataset
 
 # download a random model and a random subset of validation data, and save the outputs. These example
@@ -26,7 +26,7 @@ def main(configs):
 
     # use model from newest checkpoint
     print("making model")
-    model = APT()
+    model = APT0(configs)
     model.load_state_dict(cpt['model_state_dict'])
 
     # use dataloader to get a couple of data items 
