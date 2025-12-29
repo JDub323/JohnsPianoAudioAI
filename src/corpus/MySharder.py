@@ -89,7 +89,6 @@ class MySharder():
         if len(split_list) >= self.max_value:
             self._upload_shard(split)
             split_list.clear() # remove all elements from split list after usage
-            
 
     def _upload_shard(self, split: str):
         split_enum = SPLIT_DICT[split]
@@ -161,7 +160,6 @@ class MySharder():
                 'split': split,
                 'filename': name,
                 'shard_number': self.shard_counts[SPLIT_DICT[split]],
-                'og_shard': self.shard_counts[SPLIT_DICT[split]],
                 'shard_index': self.shard_indices[SPLIT_DICT[split]],
                 'year': year,
                 **flat_augs # merges the dictionaries flat_augs and new_row
